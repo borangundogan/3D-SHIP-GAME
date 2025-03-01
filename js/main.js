@@ -20,8 +20,8 @@ const gameState = {
 
 // DOM elements
 const loadingScreen = document.getElementById('loading-screen');
-const scoreValue = document.getElementById('score-value');
-const healthValue = document.getElementById('health-value');
+const scoreStatValue = document.getElementById('score-stat-value');
+const healthStatValue = document.getElementById('health-stat-value');
 const canvas = document.getElementById('game-canvas');
 
 // Three.js variables
@@ -35,6 +35,7 @@ window.camera = camera;
 window.renderer = renderer;
 window.gameState = gameState;
 window.updateUI = updateUI;
+window.gameOver = gameOver;
 
 // Initialize the game
 init();
@@ -45,9 +46,9 @@ function init() {
     window.scene = scene; // Update global reference
     
     // Create camera
-    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 20000);
-    camera.position.set(0, 10, 100);
-    camera.lookAt(0, 0, 0);
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 20000);
+    camera.position.set(0, 25, 100);
+    camera.lookAt(0, 10, 0); // Look slightly above the horizon
     window.camera = camera; // Update global reference
     
     // Create renderer
@@ -241,9 +242,6 @@ function updateGame(delta) {
     // Update player controls
     if (gameState.playerShip) {
         updatePlayerControls(gameState.playerShip, delta);
-        
-        // Update player health in UI
-        document.getElementById('health-value').textContent = gameState.playerShip.health;
     }
     
     // Update all ships
@@ -296,9 +294,9 @@ function gameOver() {
     gameOverScreen.id = 'game-over-screen';
     gameOverScreen.innerHTML = `
         <div class="game-over-content">
-            <h1>GAME OVER</h1>
+            <h1>YOU DIED</h1>
             <p>Your score: ${gameState.score}</p>
-            <button id="restart-btn">PLAY AGAIN</button>
+            <button id="restart-btn">START NEW GAME</button>
         </div>
     `;
     
@@ -308,11 +306,12 @@ function gameOver() {
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.8);
+        background-color: rgba(0, 0, 0, 0.95);
         display: flex;
         justify-content: center;
         align-items: center;
         z-index: 100;
+        animation: fadeIn 2s ease-in-out;
     `;
     
     const gameOverContent = gameOverScreen.querySelector('.game-over-content');
@@ -323,16 +322,18 @@ function gameOver() {
     
     const gameOverTitle = gameOverScreen.querySelector('h1');
     gameOverTitle.style.cssText = `
-        font-size: 4rem;
+        font-size: 5rem;
         margin-bottom: 1rem;
-        color: #ff3333;
-        text-shadow: 0 0 10px rgba(255, 51, 51, 0.7);
+        color: #ff0000;
+        text-shadow: 0 0 20px rgba(255, 0, 0, 0.7);
+        animation: pulseText 2s infinite;
     `;
     
     const scoreText = gameOverScreen.querySelector('p');
     scoreText.style.cssText = `
         font-size: 2rem;
         margin-bottom: 2rem;
+        color: #ffffff;
     `;
     
     const restartBtn = gameOverScreen.querySelector('#restart-btn');
@@ -345,7 +346,36 @@ function gameOver() {
         border-radius: 5px;
         cursor: pointer;
         box-shadow: 0 0 20px rgba(74, 159, 245, 0.7);
+        transition: all 0.3s ease;
+        margin-top: 20px;
     `;
+    
+    // Add hover effect for the button
+    restartBtn.addEventListener('mouseover', () => {
+        restartBtn.style.backgroundColor = '#2a7fd5';
+        restartBtn.style.transform = 'scale(1.05)';
+    });
+    
+    restartBtn.addEventListener('mouseout', () => {
+        restartBtn.style.backgroundColor = '#4a9ff5';
+        restartBtn.style.transform = 'scale(1)';
+    });
+    
+    // Add animations
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes pulseText {
+            0% { text-shadow: 0 0 20px rgba(255, 0, 0, 0.7); }
+            50% { text-shadow: 0 0 40px rgba(255, 0, 0, 1); }
+            100% { text-shadow: 0 0 20px rgba(255, 0, 0, 0.7); }
+        }
+    `;
+    document.head.appendChild(style);
     
     document.body.appendChild(gameOverScreen);
     
@@ -399,15 +429,8 @@ function updateGameStats() {
     // Update players online (random number between 15-25 for effect)
     document.getElementById('players-value').textContent = Math.floor(Math.random() * 11) + 15;
     
-    // Update health
-    const healthPercent = gameState.playerShip ? gameState.playerShip.health : 100;
-    document.getElementById('health-stat-value').textContent = `${healthPercent}%`;
-    
     // Update balloons hit
     document.getElementById('balloons-value').textContent = `${gameState.balloonsHit}/100`;
-    
-    // Update score
-    document.getElementById('score-stat-value').textContent = gameState.score;
     
     // Update ship stats if player ship exists
     if (gameState.playerShip && gameState.playerShip.isLoaded) {
@@ -423,10 +446,14 @@ function updateGameStats() {
 
 // Function to update game UI
 function updateUI() {
-    scoreValue.textContent = gameState.score;
-    healthValue.textContent = gameState.playerShip ? gameState.playerShip.health : 100;
+    // Update score and health in the game stats panel
+    scoreStatValue.textContent = gameState.score;
     
-    // Also update the game stats
+    // Update health (remove % sign since it's added in updateGameStats)
+    const healthPercent = gameState.playerShip ? gameState.playerShip.health : 100;
+    healthStatValue.textContent = `${healthPercent}%`;
+    
+    // Also update all other game stats
     updateGameStats();
 }
 

@@ -10,6 +10,9 @@ const keyStates = {
     muteSound: false
 };
 
+// Make keyStates globally accessible
+window.keyStates = keyStates;
+
 // Firing cooldown
 let lastFireTime = 0;
 const fireCooldown = 0.3; // seconds
@@ -101,6 +104,7 @@ function handleKeyUp(event, playerShip) {
             keyStates.right = false;
             break;
         case ' ':
+        case 'f':
             keyStates.fire = false;
             break;
         // New controls
@@ -116,7 +120,35 @@ function handleKeyUp(event, playerShip) {
             keyStates.muteSound = false;
             break;
     }
+    
+    // If the player ship exists and this is a movement key, ensure the ship stops if no movement keys are pressed
+    if (playerShip && ['w', 's', 'arrowup', 'arrowdown'].includes(event.key.toLowerCase())) {
+        if (!keyStates.forward && !keyStates.backward) {
+            playerShip.stopMoving();
+        }
+    }
 }
+
+// Reset all key states - can be called when focus is lost or when needed
+function resetKeyStates() {
+    keyStates.forward = false;
+    keyStates.backward = false;
+    keyStates.left = false;
+    keyStates.right = false;
+    keyStates.fire = false;
+    keyStates.superTurbo = false;
+    keyStates.toggleCamera = false;
+    keyStates.muteSound = false;
+}
+
+// Add event listener for when window loses focus to reset key states
+window.addEventListener('blur', function() {
+    resetKeyStates();
+    // If player ship exists, stop it from moving
+    if (window.gameState && window.gameState.playerShip) {
+        window.gameState.playerShip.stopMoving();
+    }
+});
 
 // Toggle camera view
 function toggleCameraView() {
@@ -380,7 +412,7 @@ function updatePlayerControls(playerShip, delta) {
     // Apply super turbo if active
     const speedMultiplier = keyStates.superTurbo ? 2.0 : 1.0;
     
-    // Handle movement
+    // Handle movement - ensure ship stops if no movement keys are pressed
     if (keyStates.forward) {
         if (window.debugControls) console.log("Moving forward");
         playerShip.moveForward(speedMultiplier);
@@ -410,6 +442,11 @@ function updatePlayerControls(playerShip, delta) {
         }
     }
     
+    // Safety check - if ship is moving but no movement keys are pressed, stop the ship
+    if (playerShip.speed !== 0 && !keyStates.forward && !keyStates.backward) {
+        playerShip.stopMoving();
+    }
+    
     // Update camera to follow player based on current view mode
     updateCameraPosition(playerShip);
     
@@ -426,13 +463,14 @@ function updateCameraPosition(playerShip) {
     
     switch (cameraViewMode) {
         case 'follow':
-            // Standard follow camera
-            const followDistance = 50; // Distance behind the ship
+            // Modified follow camera with better perspective
+            const followDistance = 80; // Increased distance behind the ship
             const followHeight = 30;   // Height above the ship
+            const followSide = 0;      // Removed side offset for a directly behind view
             
-            // Calculate position behind the ship based on its rotation
-            const followOffsetX = Math.sin(playerShip.rotation) * -followDistance;
-            const followOffsetZ = Math.cos(playerShip.rotation) * -followDistance;
+            // Calculate position directly behind the ship based on its rotation
+            const followOffsetX = Math.sin(playerShip.rotation) * -followDistance + Math.cos(playerShip.rotation) * followSide;
+            const followOffsetZ = Math.cos(playerShip.rotation) * -followDistance - Math.sin(playerShip.rotation) * followSide;
             
             // Set camera position
             window.camera.position.set(
@@ -441,8 +479,10 @@ function updateCameraPosition(playerShip) {
                 playerShip.position.z + followOffsetZ
             );
             
-            // Look at the ship
-            window.camera.lookAt(playerShip.position);
+            // Look slightly above the ship to see more of the horizon
+            const lookAtPoint = playerShip.position.clone();
+            lookAtPoint.y += 8; // Look slightly above the ship
+            window.camera.lookAt(lookAtPoint);
             break;
             
         case 'cockpit':
@@ -468,17 +508,22 @@ function updateCameraPosition(playerShip) {
             break;
             
         case 'top':
-            // Top-down view
-            const topHeight = 100; // Height above the ship
+            // Modified top-down view with angle
+            const topHeight = 120; // Height above the ship
+            const topDistance = 80; // Distance behind the ship
             
-            // Set camera position directly above the ship
+            // Calculate position above and behind the ship
+            const topOffsetX = Math.sin(playerShip.rotation) * -topDistance;
+            const topOffsetZ = Math.cos(playerShip.rotation) * -topDistance;
+            
+            // Set camera position
             window.camera.position.set(
-                playerShip.position.x,
+                playerShip.position.x + topOffsetX,
                 playerShip.position.y + topHeight,
-                playerShip.position.z
+                playerShip.position.z + topOffsetZ
             );
             
-            // Look down at the ship
+            // Look at the ship
             window.camera.lookAt(playerShip.position);
             break;
     }
@@ -486,5 +531,4 @@ function updateCameraPosition(playerShip) {
 
 // Make functions available globally
 window.initControls = initControls;
-window.updatePlayerControls = updatePlayerControls;
-window.keyStates = keyStates; 
+window.updatePlayerControls = updatePlayerControls; 

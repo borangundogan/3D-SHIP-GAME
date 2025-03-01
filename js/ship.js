@@ -22,7 +22,7 @@ class Ship {
     }
     
     createShipModel() {
-        // Create a ship model using basic geometries
+        // Create a ship model directly with vertices
         const shipGroup = new THREE.Group();
         
         // Hull
@@ -146,6 +146,19 @@ class Ship {
             if (this.model) {
                 this.model.position.copy(this.position);
             }
+            
+            // Apply slight speed decay for smoother stopping
+            if (this.isPlayer && Math.abs(this.speed) > 0.01) {
+                // Only apply decay if no movement keys are pressed
+                if (window.keyStates && !window.keyStates.forward && !window.keyStates.backward) {
+                    this.speed *= 0.95; // Gradual slowdown
+                    
+                    // If speed is very low, just stop completely
+                    if (Math.abs(this.speed) < 0.1) {
+                        this.speed = 0;
+                    }
+                }
+            }
         }
         
         // Update rotation
@@ -195,7 +208,17 @@ class Ship {
     takeDamage(amount) {
         this.health -= amount;
         
+        // Update UI if this is the player ship
+        if (this.isPlayer) {
+            window.updateUI();
+        }
+        
         if (this.health <= 0) {
+            // If this is the player ship, trigger game over
+            if (this.isPlayer) {
+                window.gameOver();
+            }
+            
             this.destroy();
         }
     }
