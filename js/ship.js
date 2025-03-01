@@ -28,6 +28,10 @@ class Ship {
         this.maxTurnRate = isPlayer ? 0.02 : 0.01; // Maximum turn rate (reduced from original turnSpeed)
         this.turnAccelerationRate = 0.001; // How quickly turning accelerates
         this.turnDecelerationRate = 0.002; // How quickly turning decelerates when no keys are pressed
+        
+        // Collision handling
+        this.lastValidPosition = new THREE.Vector3(0, 0, 0);
+        this.collisionCooldown = 0; // Cooldown timer for collision feedback
     }
     
     init() {
@@ -222,6 +226,9 @@ class Ship {
         // Apply rotation based on current turn rate
         this.rotation += this.currentTurnRate * effectiveDelta * 30;
         
+        // Store the current position as the last valid position before moving
+        this.lastValidPosition.copy(this.position);
+        
         // Move ship based on current speed
         if (this.speed !== 0) {
             // Scale movement by 30 for smoother control
@@ -239,6 +246,41 @@ class Ship {
             if (this.model) {
                 this.model.position.copy(this.position);
             }
+            
+            // Update the bounding box
+            if (this.boundingBox && this.model) {
+                this.boundingBox.setFromObject(this.model);
+            }
+            
+            // Check for collisions with mountains
+            if (window.mountainGenerator && this.checkMountainCollisions()) {
+                // If collision detected, revert to last valid position
+                this.position.copy(this.lastValidPosition);
+                
+                // Update the mesh position
+                if (this.model) {
+                    this.model.position.copy(this.position);
+                }
+                
+                // Update the bounding box
+                if (this.boundingBox && this.model) {
+                    this.boundingBox.setFromObject(this.model);
+                }
+                
+                // Apply collision feedback (reduce speed)
+                this.speed *= 0.5;
+                
+                // Add visual/audio feedback for collision if it's the player
+                if (this.isPlayer && this.collisionCooldown <= 0) {
+                    this.collisionCooldown = 0.5; // Set cooldown to 0.5 seconds
+                    this.createCollisionEffect();
+                }
+            }
+        } else {
+            // Update the bounding box even if not moving
+            if (this.boundingBox && this.model) {
+                this.boundingBox.setFromObject(this.model);
+            }
         }
         
         // Update rotation
@@ -246,9 +288,9 @@ class Ship {
             this.model.rotation.y = this.rotation;
         }
         
-        // Update the bounding box
-        if (this.boundingBox && this.model) {
-            this.boundingBox.setFromObject(this.model);
+        // Update collision cooldown
+        if (this.collisionCooldown > 0) {
+            this.collisionCooldown -= effectiveDelta;
         }
     }
     
@@ -295,6 +337,9 @@ class Ship {
         // Update UI if this is the player ship
         if (this.isPlayer) {
             window.updateUI();
+            
+            // Add visual feedback for taking damage
+            this.createDamageEffect();
         }
         
         if (this.health <= 0) {
@@ -345,6 +390,127 @@ class Ship {
         if (this.rapidFireTimeout) {
             clearTimeout(this.rapidFireTimeout);
             this.rapidFireTimeout = null;
+        }
+    }
+    
+    // Check for collisions with mountains
+    checkMountainCollisions() {
+        if (!window.mountainGenerator) return false;
+        
+        return window.mountainGenerator.checkShipCollision(this);
+    }
+    
+    // Create visual effect for collision
+    createCollisionEffect() {
+        // Create a camera shake effect for mountain collisions
+        // This provides feedback without using the red flash (which is reserved for damage)
+        
+        // 1. Add a subtle screen shake
+        const gameContainer = document.getElementById('game-container');
+        if (gameContainer) {
+            gameContainer.classList.add('screen-shake');
+            
+            // Remove the class after animation completes
+            setTimeout(() => {
+                gameContainer.classList.remove('screen-shake');
+            }, 500);
+        }
+        
+        // 2. Create a white/blue flash effect to indicate collision with terrain
+        const flash = document.createElement('div');
+        flash.className = 'collision-flash';
+        flash.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(180, 220, 255, 0.2);
+            pointer-events: none;
+            z-index: 1000;
+            animation: flash-animation 0.5s ease-out;
+        `;
+        
+        // Add animation styles if they don't exist
+        if (!document.getElementById('collision-animation-style')) {
+            const style = document.createElement('style');
+            style.id = 'collision-animation-style';
+            style.textContent = `
+                @keyframes flash-animation {
+                    0% { opacity: 1; }
+                    100% { opacity: 0; }
+                }
+                
+                .screen-shake {
+                    animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+                }
+                
+                @keyframes shake {
+                    0%, 100% { transform: translateX(0); }
+                    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+                    20%, 40%, 60%, 80% { transform: translateX(5px); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(flash);
+        
+        // Remove the flash after animation completes
+        setTimeout(() => {
+            if (flash.parentNode) {
+                flash.parentNode.removeChild(flash);
+            }
+        }, 500);
+        
+        // 3. Play a collision sound if available
+        if (window.playSound && typeof window.playSound === 'function') {
+            window.playSound('collision');
+        }
+    }
+    
+    // Create visual effect for taking damage (red flash)
+    createDamageEffect() {
+        // Create a red flash effect to indicate damage from bullets/bombs
+        const flash = document.createElement('div');
+        flash.className = 'damage-flash';
+        flash.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 0, 0, 0.3);
+            pointer-events: none;
+            z-index: 1000;
+            animation: damage-flash-animation 0.5s ease-out;
+        `;
+        
+        // Add animation styles if they don't exist
+        if (!document.getElementById('damage-animation-style')) {
+            const style = document.createElement('style');
+            style.id = 'damage-animation-style';
+            style.textContent = `
+                @keyframes damage-flash-animation {
+                    0% { opacity: 1; }
+                    100% { opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(flash);
+        
+        // Remove the flash after animation completes
+        setTimeout(() => {
+            if (flash.parentNode) {
+                flash.parentNode.removeChild(flash);
+            }
+        }, 500);
+        
+        // Play a damage sound if available
+        if (window.playSound && typeof window.playSound === 'function') {
+            window.playSound('damage');
         }
     }
 }

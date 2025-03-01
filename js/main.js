@@ -22,7 +22,8 @@ const gameState = {
     balloonsHit: 0,
     activePowerups: [], // Track active powerups
     serverStartTime: Date.now(),
-    username: 'Player' // Default username
+    username: 'Player', // Default username
+    mountainsGenerated: false // Track if mountains have been generated
 };
 
 // DOM elements
@@ -35,6 +36,7 @@ const canvas = document.getElementById('game-canvas');
 let scene, camera, renderer, water, sun, sky, controls;
 let clock = new THREE.Clock();
 let lastFrameTime = performance.now() / 1000;
+let mountainGenerator; // Mountain generator
 
 // Make variables available globally first
 window.scene = scene;
@@ -80,6 +82,10 @@ function init() {
     
     // Create environment (sky and water)
     createEnvironment();
+    
+    // Initialize mountain generator
+    mountainGenerator = new MountainGenerator(scene);
+    window.mountainGenerator = mountainGenerator; // Make available globally
     
     // Initialize login screen
     initLoginScreen();
@@ -130,6 +136,9 @@ function initLoginScreen() {
         // Initialize controls
         initControls(gameState.playerShip);
         
+        // Generate mountains
+        generateMountains();
+        
         // Hide login screen
         loginScreen.style.opacity = 0;
         
@@ -141,6 +150,45 @@ function initLoginScreen() {
             // Disable orbit controls when game starts
             controls.enabled = false;
         }, 1000);
+    }
+}
+
+function generateMountains() {
+    // Generate mountains if not already generated
+    if (!gameState.mountainsGenerated) {
+        mountainGenerator.generate();
+        
+        // Add standalone rock formations distributed across different sectors
+        const rockFormations = 12 + Math.floor(Math.random() * 6); // Increase to 12-18 rock formations
+        
+        // Create rock formations in different sectors to ensure even distribution
+        const sectorsPerRock = Math.floor(mountainGenerator.sectorCount / rockFormations);
+        let remainingSectors = mountainGenerator.sectorCount - (sectorsPerRock * rockFormations);
+        
+        for (let i = 0; i < rockFormations; i++) {
+            // Create rock formation
+            mountainGenerator.createStandaloneRocks();
+            
+            // Add extra rock formations in some sectors if we have remaining sectors
+            if (remainingSectors > 0 && Math.random() < 0.5) {
+                mountainGenerator.createStandaloneRocks();
+                remainingSectors--;
+            }
+        }
+        
+        // Add additional rock formations specifically in the forward direction (positive Z-axis)
+        // This ensures there are always rocks visible ahead of the player
+        const forwardRockFormations = 5 + Math.floor(Math.random() * 3); // 5-8 additional forward rock formations
+        
+        for (let i = 0; i < forwardRockFormations; i++) {
+            // Create rock formation in forward direction
+            // We'll use the existing createStandaloneRocks method, but the game
+            // will start with the player facing the positive Z direction, so
+            // more rocks in that area will ensure the player sees mountains ahead
+            mountainGenerator.createStandaloneRocks();
+        }
+        
+        gameState.mountainsGenerated = true;
     }
 }
 
@@ -279,6 +327,11 @@ function animate() {
     // Update username label position
     if (gameState.playerShip && gameState.playerShip.usernameLabel) {
         updateUsernameLabel(gameState.playerShip);
+    }
+    
+    // Update mountains animation
+    if (gameState.mountainsGenerated && mountainGenerator) {
+        mountainGenerator.update(delta);
     }
     
     // Render scene
