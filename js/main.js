@@ -21,11 +21,12 @@ const gameState = {
     frameCount: 0,
     balloonsHit: 0,
     activePowerups: [], // Track active powerups
-    serverStartTime: Date.now()
+    serverStartTime: Date.now(),
+    username: 'Player' // Default username
 };
 
 // DOM elements
-const loadingScreen = document.getElementById('loading-screen');
+const loginScreen = document.getElementById('login-screen');
 const scoreStatValue = document.getElementById('score-stat-value');
 const healthStatValue = document.getElementById('health-stat-value');
 const canvas = document.getElementById('game-canvas');
@@ -80,61 +81,105 @@ function init() {
     // Create environment (sky and water)
     createEnvironment();
     
-    // Create player ship
-    gameState.playerShip = createPlayerShip();
-    gameState.playerShip.init(); // Initialize the ship now that scene exists
-    
-    // Initialize controls
-    initControls(gameState.playerShip);
+    // Initialize login screen
+    initLoginScreen();
     
     // Handle window resize
     window.addEventListener('resize', onWindowResize);
-    
-    // Add start game button
-    createStartGameButton();
     
     // Start the game loop
     lastFrameTime = performance.now() / 1000;
     animate();
 }
 
-function createStartGameButton() {
-    const startButton = document.createElement('button');
-    startButton.id = 'start-game-btn';
-    startButton.textContent = 'START GAME';
-    startButton.style.cssText = `
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        padding: 15px 30px;
-        font-size: 24px;
-        background-color: #4a9ff5;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        z-index: 20;
-        font-family: 'Arial', sans-serif;
-        box-shadow: 0 0 20px rgba(74, 159, 245, 0.7);
-    `;
+function initLoginScreen() {
+    const usernameInput = document.getElementById('username-input');
+    const joinGameBtn = document.getElementById('join-game-btn');
     
-    document.body.appendChild(startButton);
+    // Focus on the username input
+    usernameInput.focus();
     
-    startButton.addEventListener('click', () => {
-        // Hide loading screen and start button
-        loadingScreen.style.opacity = 0;
-        startButton.style.display = 'none';
+    // Handle join game button click
+    joinGameBtn.addEventListener('click', () => {
+        startGame();
+    });
+    
+    // Handle enter key press in username input
+    usernameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            startGame();
+        }
+    });
+    
+    function startGame() {
+        // Get username from input
+        const username = usernameInput.value.trim();
+        
+        // Set default username if empty
+        if (username) {
+            gameState.username = username;
+        }
+        
+        // Create player ship
+        gameState.playerShip = createPlayerShip();
+        gameState.playerShip.init(); // Initialize the ship now that scene exists
+        
+        // Add username label above player ship
+        createUsernameLabel(gameState.playerShip, gameState.username);
+        
+        // Initialize controls
+        initControls(gameState.playerShip);
+        
+        // Hide login screen
+        loginScreen.style.opacity = 0;
         
         setTimeout(() => {
-            loadingScreen.style.display = 'none';
+            loginScreen.style.display = 'none';
             gameState.isLoading = false;
             gameState.gameStarted = true;
             
             // Disable orbit controls when game starts
             controls.enabled = false;
         }, 1000);
-    });
+    }
+}
+
+function createUsernameLabel(ship, username) {
+    // Create a div for the username
+    const usernameLabel = document.createElement('div');
+    usernameLabel.className = 'username-label';
+    usernameLabel.textContent = username;
+    usernameLabel.style.position = 'absolute';
+    usernameLabel.style.color = 'white';
+    usernameLabel.style.fontWeight = 'bold';
+    usernameLabel.style.textShadow = '0 0 5px #000, 0 0 5px #000';
+    document.body.appendChild(usernameLabel);
+    
+    // Store the label in the ship object
+    ship.usernameLabel = usernameLabel;
+    
+    // Update the label position in the animation loop
+    updateUsernameLabel(ship);
+}
+
+function updateUsernameLabel(ship) {
+    if (!ship || !ship.usernameLabel || !ship.isLoaded) return;
+    
+    // Calculate position above the ship
+    const position = ship.position.clone();
+    position.y += 15; // Position above the ship
+    
+    // Convert 3D position to screen coordinates
+    const screenPosition = position.clone().project(camera);
+    
+    // Convert to CSS coordinates
+    const x = (screenPosition.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-(screenPosition.y * 0.5) + 0.5) * window.innerHeight;
+    
+    // Update label position
+    ship.usernameLabel.style.left = x + 'px';
+    ship.usernameLabel.style.top = y + 'px';
+    ship.usernameLabel.style.transform = 'translate(-50%, -50%)';
 }
 
 function createLighting() {
@@ -229,6 +274,11 @@ function animate() {
     // Update game if started and not game over
     if (gameState.gameStarted && !gameState.gameOver) {
         updateGame(delta);
+    }
+    
+    // Update username label position
+    if (gameState.playerShip && gameState.playerShip.usernameLabel) {
+        updateUsernameLabel(gameState.playerShip);
     }
     
     // Render scene
@@ -415,6 +465,11 @@ function gameOver() {
 function resetGame() {
     // Clear existing ships and projectiles
     while (gameState.ships.length > 0) {
+        // Remove username label if it exists
+        if (gameState.ships[0].usernameLabel) {
+            document.body.removeChild(gameState.ships[0].usernameLabel);
+            gameState.ships[0].usernameLabel = null;
+        }
         gameState.ships[0].destroy();
     }
     
@@ -442,6 +497,9 @@ function resetGame() {
     // Create new player ship
     gameState.playerShip = createPlayerShip();
     gameState.playerShip.init(); // Initialize the ship
+    
+    // Add username label above player ship
+    createUsernameLabel(gameState.playerShip, gameState.username);
     
     // Update UI
     updateUI();

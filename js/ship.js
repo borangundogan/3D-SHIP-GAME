@@ -308,20 +308,43 @@ class Ship {
     }
     
     destroy() {
+        // Remove from scene
         if (this.model) {
             window.scene.remove(this.model);
-            
-            // Clear any pending timeouts
-            if (this.speedRestoreTimeout) {
-                clearTimeout(this.speedRestoreTimeout);
-                this.speedRestoreTimeout = null;
-            }
-            
-            // Remove from game state
-            const index = window.gameState.ships.indexOf(this);
-            if (index !== -1) {
-                window.gameState.ships.splice(index, 1);
-            }
+        }
+        
+        // Remove username label if it exists
+        if (this.usernameLabel) {
+            document.body.removeChild(this.usernameLabel);
+            this.usernameLabel = null;
+        }
+        
+        // Remove from game state
+        const index = window.gameState.ships.indexOf(this);
+        if (index !== -1) {
+            window.gameState.ships.splice(index, 1);
+        }
+        
+        // Clear any active timeouts
+        if (this.speedRestoreTimeout) {
+            clearTimeout(this.speedRestoreTimeout);
+            this.speedRestoreTimeout = null;
+        }
+        
+        // Clear any active powerup timeouts
+        if (this.speedBoostTimeout) {
+            clearTimeout(this.speedBoostTimeout);
+            this.speedBoostTimeout = null;
+        }
+        
+        if (this.shieldTimeout) {
+            clearTimeout(this.shieldTimeout);
+            this.shieldTimeout = null;
+        }
+        
+        if (this.rapidFireTimeout) {
+            clearTimeout(this.rapidFireTimeout);
+            this.rapidFireTimeout = null;
         }
     }
 }
