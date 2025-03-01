@@ -46,6 +46,7 @@ function handleKeyDown(event, playerShip) {
             keyStates.right = true;
             break;
         case ' ':
+        case 'f':
             keyStates.fire = true;
             break;
     }
@@ -295,12 +296,29 @@ function createMobileControlElements() {
 function updatePlayerControls(playerShip, delta) {
     if (!playerShip || !playerShip.isLoaded) return;
     
+    // Disable debug output
+    window.debugControls = false;
+    
+    // Log key states for debugging
+    if (window.debugControls) {
+        console.log("Key States:", {
+            forward: keyStates.forward,
+            backward: keyStates.backward,
+            left: keyStates.left,
+            right: keyStates.right,
+            fire: keyStates.fire
+        });
+    }
+    
     // Handle movement
     if (keyStates.forward) {
+        if (window.debugControls) console.log("Moving forward");
         playerShip.moveForward();
     } else if (keyStates.backward) {
+        if (window.debugControls) console.log("Moving backward");
         playerShip.moveBackward();
     } else {
+        if (window.debugControls) console.log("Stopping movement");
         playerShip.stopMoving();
     }
     
@@ -325,28 +343,34 @@ function updatePlayerControls(playerShip, delta) {
     // Update camera to follow player
     updateCameraPosition(playerShip);
     
-    // Debug output to console if controls are active
+    // Debug output to console
     if (window.debugControls) {
-        console.log("Control states:", keyStates);
         console.log("Ship speed:", playerShip.speed);
+        console.log("Ship position:", playerShip.position);
     }
 }
 
-// Update camera position to follow player
+// Update camera to follow player ship
 function updateCameraPosition(playerShip) {
     if (!playerShip || !playerShip.isLoaded) return;
     
-    // Position camera behind and above the ship
-    const offset = new THREE.Vector3(0, 30, 80);
-    offset.applyEuler(new THREE.Euler(0, playerShip.model.rotation.y, 0));
+    // Calculate camera position behind the ship
+    const distance = 50; // Distance behind the ship
+    const height = 30;   // Height above the ship
     
-    const targetPosition = playerShip.model.position.clone().add(offset);
+    // Calculate position behind the ship based on its rotation
+    const offsetX = Math.sin(playerShip.rotation) * -distance;
+    const offsetZ = Math.cos(playerShip.rotation) * -distance;
     
-    // Smoothly move camera to target position
-    window.camera.position.lerp(targetPosition, 0.05);
+    // Set camera position
+    window.camera.position.set(
+        playerShip.position.x + offsetX,
+        playerShip.position.y + height,
+        playerShip.position.z + offsetZ
+    );
     
-    // Make camera look at the ship
-    window.camera.lookAt(playerShip.model.position);
+    // Look at the ship
+    window.camera.lookAt(playerShip.position);
 }
 
 // Make functions available globally

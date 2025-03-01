@@ -1,94 +1,110 @@
 // Ship class
 class Ship {
-    constructor(type, position, rotation) {
-        this.type = type;
-        this.position = position || new THREE.Vector3(0, 0, 0);
-        this.rotation = rotation || new THREE.Euler(0, 0, 0);
+    constructor(isPlayer = false) {
+        this.isPlayer = isPlayer;
+        this.maxSpeed = isPlayer ? 1.5 : 0.8;
+        this.turnSpeed = isPlayer ? 0.03 : 0.015;
+        this.rotation = 0;
         this.speed = 0;
-        this.maxSpeed = type === 'player' ? 1.0 : 0.5;
-        this.turnSpeed = type === 'player' ? 0.03 : 0.01;
-        this.health = type === 'player' ? 100 : 50;
+        this.direction = 0;
+        this.health = 100;
+        this.position = new THREE.Vector3(0, 0, 0);
+        this.mesh = null;
         this.model = null;
         this.boundingBox = null;
         this.isLoaded = false;
-        
-        // We'll load the model later when scene is available
     }
     
     init() {
-        // Load the ship model
-        this.loadModel();
+        // Create the ship model directly with vertices
+        this.createShipModel();
         return this;
     }
     
-    loadModel() {
-        const loader = new THREE.GLTFLoader();
-        const modelUrl = this.type === 'player' 
-            ? 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/ship/scene.gltf'
-            : 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/ship/scene.gltf'; // Use same model for now, we can change later
-        
-        loader.load(
-            modelUrl,
-            (gltf) => {
-                this.model = gltf.scene;
-                
-                // Scale and position the model
-                this.model.scale.set(0.5, 0.5, 0.5);
-                this.model.position.copy(this.position);
-                this.model.rotation.copy(this.rotation);
-                
-                // Create a bounding box for collision detection
-                const boundingBoxHelper = new THREE.Box3().setFromObject(this.model);
-                this.boundingBox = boundingBoxHelper;
-                
-                // Add to scene
-                window.scene.add(this.model);
-                this.isLoaded = true;
-                
-                // Add to game state
-                window.gameState.ships.push(this);
-            },
-            (xhr) => {
-                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-            },
-            (error) => {
-                console.error('An error happened while loading the ship model:', error);
-                
-                // Fallback to a simple ship model if loading fails
-                this.createFallbackModel();
-            }
-        );
-    }
-    
-    createFallbackModel() {
-        // Create a simple ship model using basic geometries
+    createShipModel() {
+        // Create a ship model using basic geometries
         const shipGroup = new THREE.Group();
         
         // Hull
         const hullGeometry = new THREE.BoxGeometry(10, 3, 25);
-        const hullMaterial = new THREE.MeshPhongMaterial({ color: this.type === 'player' ? 0x3366ff : 0xff3333 });
+        const hullMaterial = new THREE.MeshPhongMaterial({ 
+            color: this.isPlayer ? 0x3366ff : 0xff3333,
+            shininess: 30
+        });
         const hull = new THREE.Mesh(hullGeometry, hullMaterial);
         hull.position.y = 1.5;
         shipGroup.add(hull);
         
         // Bridge
         const bridgeGeometry = new THREE.BoxGeometry(6, 4, 8);
-        const bridgeMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+        const bridgeMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x333333,
+            shininess: 20
+        });
         const bridge = new THREE.Mesh(bridgeGeometry, bridgeMaterial);
         bridge.position.set(0, 5, -2);
         shipGroup.add(bridge);
         
         // Cannon
         const cannonGeometry = new THREE.CylinderGeometry(0.8, 1, 10);
-        const cannonMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+        const cannonMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x666666,
+            shininess: 50
+        });
         const cannon = new THREE.Mesh(cannonGeometry, cannonMaterial);
         cannon.rotation.x = Math.PI / 2;
         cannon.position.set(0, 4, 8);
         shipGroup.add(cannon);
         
+        // Add details based on ship type
+        if (this.isPlayer) {
+            // Add radar/antenna
+            const antennaGeometry = new THREE.CylinderGeometry(0.2, 0.2, 6);
+            const antennaMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
+            const antenna = new THREE.Mesh(antennaGeometry, antennaMaterial);
+            antenna.position.set(0, 9, -4);
+            shipGroup.add(antenna);
+            
+            // Add radar dish
+            const radarGeometry = new THREE.SphereGeometry(1, 8, 8, 0, Math.PI);
+            const radarMaterial = new THREE.MeshPhongMaterial({ color: 0xCCCCCC });
+            const radar = new THREE.Mesh(radarGeometry, radarMaterial);
+            radar.rotation.x = Math.PI / 2;
+            radar.position.set(0, 12, -4);
+            shipGroup.add(radar);
+            
+            // Add deck details
+            const deckDetailGeometry = new THREE.BoxGeometry(8, 0.5, 15);
+            const deckDetailMaterial = new THREE.MeshPhongMaterial({ color: 0x222222 });
+            const deckDetail = new THREE.Mesh(deckDetailGeometry, deckDetailMaterial);
+            deckDetail.position.set(0, 3.2, 0);
+            shipGroup.add(deckDetail);
+        } else {
+            // Enemy ship details
+            // Add a different style bridge for enemy ships
+            const enemyTowerGeometry = new THREE.CylinderGeometry(2, 3, 6);
+            const enemyTowerMaterial = new THREE.MeshPhongMaterial({ color: 0x880000 });
+            const enemyTower = new THREE.Mesh(enemyTowerGeometry, enemyTowerMaterial);
+            enemyTower.position.set(0, 6, -5);
+            shipGroup.add(enemyTower);
+            
+            // Add enemy cannons (two smaller ones)
+            const enemyCannonGeometry = new THREE.CylinderGeometry(0.6, 0.8, 8);
+            const enemyCannonMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
+            
+            const leftCannon = new THREE.Mesh(enemyCannonGeometry, enemyCannonMaterial);
+            leftCannon.rotation.x = Math.PI / 2;
+            leftCannon.position.set(-3, 3, 6);
+            shipGroup.add(leftCannon);
+            
+            const rightCannon = new THREE.Mesh(enemyCannonGeometry, enemyCannonMaterial);
+            rightCannon.rotation.x = Math.PI / 2;
+            rightCannon.position.set(3, 3, 6);
+            shipGroup.add(rightCannon);
+        }
+        
         this.model = shipGroup;
         this.model.position.copy(this.position);
-        this.model.rotation.copy(this.rotation);
         
         // Create a bounding box for collision detection
         const boundingBoxHelper = new THREE.Box3().setFromObject(this.model);
@@ -105,42 +121,75 @@ class Ship {
     update(delta) {
         if (!this.isLoaded) return;
         
-        // Update position based on speed and rotation
-        const direction = new THREE.Vector3(0, 0, -1);
-        direction.applyEuler(this.model.rotation);
-        direction.multiplyScalar(this.speed * delta);
+        // Debug output
+        if (window.debugControls) {
+            console.log("Ship update - speed:", this.speed, "delta:", delta);
+        }
         
-        this.model.position.add(direction);
+        // Ensure delta is not too small (minimum effective delta of 0.016s = 60fps)
+        const effectiveDelta = Math.max(delta, 0.016);
+        
+        // Move ship based on current speed and direction
+        if (this.speed !== 0) {
+            // Scale movement by 30 for smoother control
+            const moveAmount = this.speed * effectiveDelta * 30;
+            
+            if (window.debugControls) {
+                console.log("Moving ship by:", moveAmount, "Direction:", this.direction);
+            }
+            
+            // Update position based on direction and speed
+            this.position.x += Math.sin(this.rotation) * moveAmount;
+            this.position.z += Math.cos(this.rotation) * moveAmount;
+            
+            // Update the mesh position
+            if (this.model) {
+                this.model.position.copy(this.position);
+            }
+        }
+        
+        // Update rotation
+        if (this.model) {
+            this.model.rotation.y = this.rotation;
+        }
         
         // Update the bounding box
-        this.boundingBox.setFromObject(this.model);
-        
-        // Update the ship's position property
-        this.position.copy(this.model.position);
+        if (this.boundingBox && this.model) {
+            this.boundingBox.setFromObject(this.model);
+        }
     }
     
     moveForward() {
+        if (window.debugControls) {
+            console.log("Ship.moveForward() called, setting speed to", this.maxSpeed);
+        }
         this.speed = this.maxSpeed;
+        this.direction = 1;
     }
     
     moveBackward() {
-        this.speed = -this.maxSpeed / 2; // Slower in reverse
+        if (window.debugControls) {
+            console.log("Ship.moveBackward() called, setting speed to", -this.maxSpeed);
+        }
+        this.speed = -this.maxSpeed;
+        this.direction = -1;
     }
     
     stopMoving() {
+        if (window.debugControls) {
+            console.log("Ship.stopMoving() called, setting speed to 0");
+        }
         this.speed = 0;
     }
     
     turnLeft() {
         if (!this.isLoaded) return;
-        this.model.rotation.y += this.turnSpeed;
-        this.rotation.copy(this.model.rotation);
+        this.rotation += this.turnSpeed;
     }
     
     turnRight() {
         if (!this.isLoaded) return;
-        this.model.rotation.y -= this.turnSpeed;
-        this.rotation.copy(this.model.rotation);
+        this.rotation -= this.turnSpeed;
     }
     
     takeDamage(amount) {
@@ -166,13 +215,13 @@ class Ship {
 
 // Function to create player ship
 function createPlayerShip() {
-    return new Ship('player', new THREE.Vector3(0, 0, 0), new THREE.Euler(0, 0, 0));
+    return new Ship(true);
 }
 
 // Function to create enemy ship
 function createEnemyShip(position) {
     const randomRotation = new THREE.Euler(0, Math.random() * Math.PI * 2, 0);
-    return new Ship('enemy', position, randomRotation);
+    return new Ship(false);
 }
 
 // Make functions available globally

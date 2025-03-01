@@ -22,6 +22,7 @@ const canvas = document.getElementById('game-canvas');
 // Three.js variables
 let scene, camera, renderer, water, sun, sky, controls;
 let clock = new THREE.Clock();
+let lastFrameTime = performance.now() / 1000;
 
 // Make variables available globally first
 window.scene = scene;
@@ -80,7 +81,8 @@ function init() {
     // Add start game button
     createStartGameButton();
     
-    // Start animation loop
+    // Start the game loop
+    lastFrameTime = performance.now() / 1000;
     animate();
 }
 
@@ -192,67 +194,68 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
+// Animation loop
 function animate() {
     requestAnimationFrame(animate);
     
-    const delta = clock.getDelta();
+    // Calculate delta time
+    const currentTime = performance.now() / 1000;
+    const delta = currentTime - lastFrameTime;
+    lastFrameTime = currentTime;
     
     // Update game if started and not game over
     if (gameState.gameStarted && !gameState.gameOver) {
         updateGame(delta);
     }
     
-    // Update water
-    if (water && water.material && water.material.uniforms) {
-        water.material.uniforms['time'].value += delta * 0.5;
-    }
-    
-    // Update controls if orbit controls are enabled
-    if (controls && controls.enabled) {
-        controls.update();
-    }
-    
     // Render scene
     renderer.render(scene, camera);
+    
+    // Update water
+    water.material.uniforms['time'].value += 1.0 / 60.0;
 }
 
+// Game update function
 function updateGame(delta) {
+    // Debug output
+    if (window.debugControls) {
+        console.log("Game update frame, delta:", delta);
+    }
+    
     // Update player controls
     if (gameState.playerShip) {
         updatePlayerControls(gameState.playerShip, delta);
         
         // Update player health in UI
-        if (gameState.playerShip.health !== gameState.health) {
-            gameState.health = gameState.playerShip.health;
-            updateUI();
-            
-            // Check for game over
-            if (gameState.health <= 0) {
-                gameOver();
-            }
-        }
+        document.getElementById('health-value').textContent = gameState.playerShip.health;
     }
     
     // Update all ships
+    if (window.debugControls) {
+        console.log("Updating", gameState.ships.length, "ships");
+    }
+    
     for (let i = 0; i < gameState.ships.length; i++) {
         gameState.ships[i].update(delta);
     }
     
     // Update projectiles
-    updateProjectiles(delta);
+    window.updateProjectiles(delta);
     
     // Update enemy AI
-    updateEnemyAI(delta);
+    window.updateEnemyAI(delta);
     
     // Spawn enemies
     gameState.enemySpawnTimer += delta;
     if (gameState.enemySpawnTimer >= gameState.enemySpawnInterval) {
         spawnEnemy();
         gameState.enemySpawnTimer = 0;
-        
         // Make enemies spawn faster as the game progresses
         gameState.enemySpawnInterval = Math.max(3, gameState.enemySpawnInterval * 0.95);
     }
+    
+    // Update UI
+    updateUI();
 }
 
 function spawnEnemy() {

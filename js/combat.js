@@ -71,8 +71,9 @@ class Projectile {
             const ship = window.gameState.ships[i];
             
             // Skip if ship is not loaded or if projectile belongs to the ship
-            if (!ship.isLoaded || (this.owner === 'player' && ship.type === 'player') || 
-                (this.owner === 'enemy' && ship.type === 'enemy')) {
+            if (!ship.isLoaded || 
+                (this.owner === 'player' && ship.isPlayer) || 
+                (this.owner === 'enemy' && !ship.isPlayer)) {
                 continue;
             }
             
@@ -82,7 +83,7 @@ class Projectile {
                 ship.takeDamage(this.damage);
                 
                 // Update score if player hit an enemy
-                if (this.owner === 'player' && ship.type === 'enemy') {
+                if (this.owner === 'player' && !ship.isPlayer) {
                     window.gameState.score += 10;
                     window.updateUI();
                     
@@ -123,23 +124,26 @@ function fireProjectile(ship) {
     if (!ship || !ship.isLoaded) return;
     
     // Calculate projectile starting position at the tip of the cannon
-    // For the fallback model, the cannon is positioned at (0, 4, 8) with length 10
-    // and rotated 90 degrees on X axis, so the tip is at z = 13
-    const offset = new THREE.Vector3(0, 4, 13); // Position at the tip of the cannon
-    offset.applyEuler(ship.model.rotation);
+    const cannonLength = 5; // Length of the cannon from its base
+    const cannonOffset = new THREE.Vector3(0, 4, 8 + cannonLength); // Position at the tip of the cannon
     
-    const position = ship.model.position.clone().add(offset);
+    // Apply ship's rotation to the offset
+    const rotatedOffset = cannonOffset.clone();
+    rotatedOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), ship.rotation);
+    
+    // Calculate position (ship position + rotated offset)
+    const position = ship.position.clone().add(rotatedOffset);
     
     // Calculate direction (forward direction of the ship)
-    const direction = new THREE.Vector3(0, 0, -1);
-    direction.applyEuler(ship.model.rotation);
+    const direction = new THREE.Vector3(0, 0, 1); // Forward direction
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), ship.rotation);
     
     // Create projectile
     return new Projectile(
         position,
         direction,
-        ship.type === 'player' ? 8 : 5, // Player projectiles are faster
-        ship.type
+        ship.isPlayer ? 8 : 5, // Player projectiles are faster
+        ship.isPlayer ? 'player' : 'enemy'
     );
 }
 
@@ -162,7 +166,7 @@ function updateEnemyAI(delta) {
         const ship = window.gameState.ships[i];
         
         // Skip if not an enemy or not loaded
-        if (ship.type !== 'enemy' || !ship.isLoaded) continue;
+        if (ship.isPlayer || !ship.isLoaded) continue;
         
         // Skip if player ship doesn't exist or isn't loaded
         if (!window.gameState.playerShip || !window.gameState.playerShip.isLoaded) continue;
@@ -178,7 +182,8 @@ function updateEnemyAI(delta) {
                 .normalize();
             
             // Calculate angle to player
-            const shipForward = new THREE.Vector3(0, 0, -1).applyEuler(ship.model.rotation);
+            const shipForward = new THREE.Vector3(0, 0, 1);
+            shipForward.applyAxisAngle(new THREE.Vector3(0, 1, 0), ship.rotation);
             const angleToPlayer = shipForward.angleTo(directionToPlayer);
             
             // Determine turn direction (left or right)
@@ -186,8 +191,7 @@ function updateEnemyAI(delta) {
             const turnDirection = cross.y > 0 ? 1 : -1;
             
             // Turn towards player
-            ship.model.rotation.y += turnDirection * ship.turnSpeed;
-            ship.rotation.copy(ship.model.rotation);
+            ship.rotation += turnDirection * ship.turnSpeed;
             
             // Move forward
             ship.moveForward();
@@ -204,8 +208,7 @@ function updateEnemyAI(delta) {
         } else {
             // Move randomly if not in range
             if (Math.random() < 0.01) {
-                ship.model.rotation.y += (Math.random() - 0.5) * 0.2;
-                ship.rotation.copy(ship.model.rotation);
+                ship.rotation += (Math.random() - 0.5) * 0.2;
             }
             
             // Move forward
