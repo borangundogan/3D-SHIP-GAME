@@ -3,6 +3,7 @@ class Ship {
     constructor(isPlayer = false) {
         this.isPlayer = isPlayer;
         this.maxSpeed = isPlayer ? 1.5 : 0.8;
+        this.originalMaxSpeed = isPlayer ? 1.5 : 0.8; // Store the original max speed
         this.turnSpeed = isPlayer ? 0.03 : 0.015;
         this.rotation = 0;
         this.speed = 0;
@@ -14,6 +15,7 @@ class Ship {
         this.model = null;
         this.boundingBox = null;
         this.isLoaded = false;
+        this.speedRestoreTimeout = null; // For tracking the speed restoration timeout
         
         // Acceleration and deceleration rates
         this.accelerationRate = 0.05;  // How quickly the ship accelerates
@@ -308,6 +310,12 @@ class Ship {
     destroy() {
         if (this.model) {
             window.scene.remove(this.model);
+            
+            // Clear any pending timeouts
+            if (this.speedRestoreTimeout) {
+                clearTimeout(this.speedRestoreTimeout);
+                this.speedRestoreTimeout = null;
+            }
             
             // Remove from game state
             const index = window.gameState.ships.indexOf(this);

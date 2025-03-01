@@ -6,9 +6,12 @@ const gameState = {
     isLoading: true,
     ships: [],
     projectiles: [],
+    seaObjects: [], // Add array for sea objects
     playerShip: null,
     enemySpawnTimer: 0,
     enemySpawnInterval: 10, // seconds
+    seaObjectSpawnTimer: 0, // Add timer for sea objects
+    seaObjectSpawnInterval: 5, // seconds
     gameStarted: false,
     gameOver: false,
     fps: 0,
@@ -256,6 +259,9 @@ function updateGame(delta) {
     // Update projectiles
     window.updateProjectiles(delta);
     
+    // Update sea objects
+    window.updateSeaObjects(delta);
+    
     // Update enemy AI
     window.updateEnemyAI(delta);
     
@@ -266,6 +272,13 @@ function updateGame(delta) {
         gameState.enemySpawnTimer = 0;
         // Make enemies spawn faster as the game progresses
         gameState.enemySpawnInterval = Math.max(3, gameState.enemySpawnInterval * 0.95);
+    }
+    
+    // Spawn sea objects
+    gameState.seaObjectSpawnTimer += delta;
+    if (gameState.seaObjectSpawnTimer >= gameState.seaObjectSpawnInterval) {
+        spawnRandomSeaObject();
+        gameState.seaObjectSpawnTimer = 0;
     }
     
     // Update UI
@@ -399,12 +412,20 @@ function resetGame() {
         gameState.projectiles[0].destroy();
     }
     
+    // Clear existing sea objects
+    while (gameState.seaObjects.length > 0) {
+        gameState.seaObjects[0].destroy();
+    }
+    
     // Reset game state
     gameState.score = 0;
     gameState.health = 100;
     gameState.gameOver = false;
     gameState.enemySpawnTimer = 0;
     gameState.enemySpawnInterval = 10;
+    gameState.seaObjectSpawnTimer = 0;
+    gameState.seaObjectSpawnInterval = 5;
+    gameState.balloonsHit = 0;
     
     // Create new player ship
     gameState.playerShip = createPlayerShip();
@@ -442,6 +463,15 @@ function updateGameStats() {
         const throttlePercent = Math.round((Math.abs(gameState.playerShip.targetSpeed) / gameState.playerShip.maxSpeed) * 100);
         document.getElementById('throttle-value').textContent = `${throttlePercent}%`;
         
+        // Show if ship is slowed down
+        if (gameState.playerShip.maxSpeed < gameState.playerShip.originalMaxSpeed) {
+            document.getElementById('speed-value').style.color = '#00AAFF';
+            document.getElementById('throttle-value').style.color = '#00AAFF';
+        } else {
+            document.getElementById('speed-value').style.color = '';
+            document.getElementById('throttle-value').style.color = '';
+        }
+        
         // Turn rate (direction and percentage)
         const turnDirection = gameState.playerShip.currentTurnRate > 0 ? 'LEFT' : gameState.playerShip.currentTurnRate < 0 ? 'RIGHT' : 'CENTER';
         const turnPercent = Math.round((Math.abs(gameState.playerShip.currentTurnRate) / gameState.playerShip.maxTurnRate) * 100);
@@ -465,6 +495,18 @@ function updateUI() {
     
     // Also update all other game stats
     updateGameStats();
+}
+
+// Function to spawn a random sea object
+function spawnRandomSeaObject() {
+    // Skip if player ship doesn't exist or isn't loaded
+    if (!gameState.playerShip || !gameState.playerShip.isLoaded) return;
+    
+    // Randomly choose between bomb and skittle
+    const type = Math.random() < 0.3 ? 'bomb' : 'skittle';
+    
+    // Spawn the sea object
+    window.spawnSeaObject(type);
 }
 
 // Make functions and variables available globally
