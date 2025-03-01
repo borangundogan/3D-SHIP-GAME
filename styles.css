@@ -84,4 +84,81 @@ body, html {
 #score-value, #health-value {
     font-weight: bold;
     color: #4a9ff5;
+}
+
+/* Game Stats Panel */
+#game-stats {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 5;
+    color: white;
+    font-size: 1rem;
+    font-family: monospace;
+    background-color: rgba(59, 77, 118, 0.8);
+    padding: 15px;
+    border-radius: 5px;
+    width: 300px;
+    line-height: 1.5;
+}
+
+#fps, #server-time {
+    color: #4AFF4A; /* Green */
+}
+
+#players-online {
+    color: #FF4A4A; /* Red */
+}
+
+#health-stat {
+    color: #4AFF4A; /* Green */
+}
+
+#balloons {
+    color: #4AFF4A; /* Green */
+}
+
+#score-stat {
+    color: #FFFF4A; /* Yellow */
+}
+
+.stat-spacer {
+    height: 15px;
+}
+
+#speed, #throttle {
+    color: white;
+}
+
+#fps-value, #time-value, #players-value, #health-stat-value, 
+#balloons-value, #score-stat-value, #speed-value, #throttle-value {
+    font-weight: bold;
+}
+
+/* Controls Info Panel */
+#controls-info {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    z-index: 5;
+    color: white;
+    font-size: 1rem;
+    font-family: monospace;
+    background-color: rgba(59, 77, 118, 0.8);
+    padding: 15px;
+    border-radius: 5px;
+    width: 300px;
+    line-height: 1.5;
+}
+
+.control-item {
+    margin-bottom: 5px;
+}
+
+.nickname {
+    margin-top: 15px;
+    color: #4AFF4A;
+    font-weight: bold;
+    text-align: right;
+    font-style: italic;
 } 

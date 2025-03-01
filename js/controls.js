@@ -4,12 +4,21 @@ const keyStates = {
     backward: false,
     left: false,
     right: false,
-    fire: false
+    fire: false,
+    superTurbo: false,
+    toggleCamera: false,
+    muteSound: false
 };
 
 // Firing cooldown
 let lastFireTime = 0;
 const fireCooldown = 0.3; // seconds
+
+// Camera view state
+let cameraViewMode = 'follow'; // 'follow', 'cockpit', 'top'
+
+// Sound state
+let soundMuted = false;
 
 // Initialize controls
 function initControls(playerShip) {
@@ -49,6 +58,26 @@ function handleKeyDown(event, playerShip) {
         case 'f':
             keyStates.fire = true;
             break;
+        // New controls
+        case 'shift':
+            if (event.location === KeyboardEvent.DOM_KEY_LOCATION_RIGHT) {
+                keyStates.superTurbo = true;
+            }
+            break;
+        case 'v':
+            // Toggle camera view on key press, not hold
+            if (!keyStates.toggleCamera) {
+                keyStates.toggleCamera = true;
+                toggleCameraView();
+            }
+            break;
+        case 'm':
+            // Toggle sound on key press, not hold
+            if (!keyStates.muteSound) {
+                keyStates.muteSound = true;
+                toggleSound();
+            }
+            break;
     }
 }
 
@@ -74,7 +103,44 @@ function handleKeyUp(event, playerShip) {
         case ' ':
             keyStates.fire = false;
             break;
+        // New controls
+        case 'shift':
+            if (event.location === KeyboardEvent.DOM_KEY_LOCATION_RIGHT) {
+                keyStates.superTurbo = false;
+            }
+            break;
+        case 'v':
+            keyStates.toggleCamera = false;
+            break;
+        case 'm':
+            keyStates.muteSound = false;
+            break;
     }
+}
+
+// Toggle camera view
+function toggleCameraView() {
+    // Cycle through camera views: follow -> cockpit -> top -> follow
+    switch (cameraViewMode) {
+        case 'follow':
+            cameraViewMode = 'cockpit';
+            break;
+        case 'cockpit':
+            cameraViewMode = 'top';
+            break;
+        case 'top':
+            cameraViewMode = 'follow';
+            break;
+    }
+    
+    console.log(`Camera view changed to: ${cameraViewMode}`);
+}
+
+// Toggle sound
+function toggleSound() {
+    soundMuted = !soundMuted;
+    console.log(`Sound ${soundMuted ? 'muted' : 'unmuted'}`);
+    // Here you would implement actual sound muting logic
 }
 
 // Initialize mobile controls
@@ -306,17 +372,21 @@ function updatePlayerControls(playerShip, delta) {
             backward: keyStates.backward,
             left: keyStates.left,
             right: keyStates.right,
-            fire: keyStates.fire
+            fire: keyStates.fire,
+            superTurbo: keyStates.superTurbo
         });
     }
+    
+    // Apply super turbo if active
+    const speedMultiplier = keyStates.superTurbo ? 2.0 : 1.0;
     
     // Handle movement
     if (keyStates.forward) {
         if (window.debugControls) console.log("Moving forward");
-        playerShip.moveForward();
+        playerShip.moveForward(speedMultiplier);
     } else if (keyStates.backward) {
         if (window.debugControls) console.log("Moving backward");
-        playerShip.moveBackward();
+        playerShip.moveBackward(speedMultiplier);
     } else {
         if (window.debugControls) console.log("Stopping movement");
         playerShip.stopMoving();
@@ -324,11 +394,11 @@ function updatePlayerControls(playerShip, delta) {
     
     // Handle turning
     if (keyStates.left) {
-        playerShip.turnLeft();
+        playerShip.turnLeft(speedMultiplier);
     }
     
     if (keyStates.right) {
-        playerShip.turnRight();
+        playerShip.turnRight(speedMultiplier);
     }
     
     // Handle firing
@@ -340,7 +410,7 @@ function updatePlayerControls(playerShip, delta) {
         }
     }
     
-    // Update camera to follow player
+    // Update camera to follow player based on current view mode
     updateCameraPosition(playerShip);
     
     // Debug output to console
@@ -354,23 +424,64 @@ function updatePlayerControls(playerShip, delta) {
 function updateCameraPosition(playerShip) {
     if (!playerShip || !playerShip.isLoaded) return;
     
-    // Calculate camera position behind the ship
-    const distance = 50; // Distance behind the ship
-    const height = 30;   // Height above the ship
-    
-    // Calculate position behind the ship based on its rotation
-    const offsetX = Math.sin(playerShip.rotation) * -distance;
-    const offsetZ = Math.cos(playerShip.rotation) * -distance;
-    
-    // Set camera position
-    window.camera.position.set(
-        playerShip.position.x + offsetX,
-        playerShip.position.y + height,
-        playerShip.position.z + offsetZ
-    );
-    
-    // Look at the ship
-    window.camera.lookAt(playerShip.position);
+    switch (cameraViewMode) {
+        case 'follow':
+            // Standard follow camera
+            const followDistance = 50; // Distance behind the ship
+            const followHeight = 30;   // Height above the ship
+            
+            // Calculate position behind the ship based on its rotation
+            const followOffsetX = Math.sin(playerShip.rotation) * -followDistance;
+            const followOffsetZ = Math.cos(playerShip.rotation) * -followDistance;
+            
+            // Set camera position
+            window.camera.position.set(
+                playerShip.position.x + followOffsetX,
+                playerShip.position.y + followHeight,
+                playerShip.position.z + followOffsetZ
+            );
+            
+            // Look at the ship
+            window.camera.lookAt(playerShip.position);
+            break;
+            
+        case 'cockpit':
+            // First-person/cockpit view
+            const cockpitHeight = 5; // Height above the ship deck
+            const cockpitForward = 5; // Distance forward from ship center
+            
+            // Calculate position at the cockpit
+            const cockpitOffsetX = Math.sin(playerShip.rotation) * cockpitForward;
+            const cockpitOffsetZ = Math.cos(playerShip.rotation) * cockpitForward;
+            
+            // Set camera position
+            window.camera.position.set(
+                playerShip.position.x + cockpitOffsetX,
+                playerShip.position.y + cockpitHeight,
+                playerShip.position.z + cockpitOffsetZ
+            );
+            
+            // Look in the direction the ship is facing
+            const lookAtX = playerShip.position.x + Math.sin(playerShip.rotation) * 100;
+            const lookAtZ = playerShip.position.z + Math.cos(playerShip.rotation) * 100;
+            window.camera.lookAt(new THREE.Vector3(lookAtX, playerShip.position.y + cockpitHeight, lookAtZ));
+            break;
+            
+        case 'top':
+            // Top-down view
+            const topHeight = 100; // Height above the ship
+            
+            // Set camera position directly above the ship
+            window.camera.position.set(
+                playerShip.position.x,
+                playerShip.position.y + topHeight,
+                playerShip.position.z
+            );
+            
+            // Look down at the ship
+            window.camera.lookAt(playerShip.position);
+            break;
+    }
 }
 
 // Make functions available globally

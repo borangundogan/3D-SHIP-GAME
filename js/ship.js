@@ -159,19 +159,19 @@ class Ship {
         }
     }
     
-    moveForward() {
+    moveForward(speedMultiplier = 1.0) {
         if (window.debugControls) {
-            console.log("Ship.moveForward() called, setting speed to", this.maxSpeed);
+            console.log("Ship.moveForward() called, setting speed to", this.maxSpeed * speedMultiplier);
         }
-        this.speed = this.maxSpeed;
+        this.speed = this.maxSpeed * speedMultiplier;
         this.direction = 1;
     }
     
-    moveBackward() {
+    moveBackward(speedMultiplier = 1.0) {
         if (window.debugControls) {
-            console.log("Ship.moveBackward() called, setting speed to", -this.maxSpeed);
+            console.log("Ship.moveBackward() called, setting speed to", -this.maxSpeed * speedMultiplier);
         }
-        this.speed = -this.maxSpeed;
+        this.speed = -this.maxSpeed * speedMultiplier;
         this.direction = -1;
     }
     
@@ -182,14 +182,14 @@ class Ship {
         this.speed = 0;
     }
     
-    turnLeft() {
+    turnLeft(speedMultiplier = 1.0) {
         if (!this.isLoaded) return;
-        this.rotation += this.turnSpeed;
+        this.rotation += this.turnSpeed * speedMultiplier;
     }
     
-    turnRight() {
+    turnRight(speedMultiplier = 1.0) {
         if (!this.isLoaded) return;
-        this.rotation -= this.turnSpeed;
+        this.rotation -= this.turnSpeed * speedMultiplier;
     }
     
     takeDamage(amount) {

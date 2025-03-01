@@ -10,7 +10,12 @@ const gameState = {
     enemySpawnTimer: 0,
     enemySpawnInterval: 10, // seconds
     gameStarted: false,
-    gameOver: false
+    gameOver: false,
+    fps: 0,
+    lastFpsUpdate: 0,
+    frameCount: 0,
+    balloonsHit: 0,
+    serverStartTime: Date.now()
 };
 
 // DOM elements
@@ -203,6 +208,17 @@ function animate() {
     const delta = currentTime - lastFrameTime;
     lastFrameTime = currentTime;
     
+    // Update FPS counter
+    gameState.frameCount++;
+    if (currentTime - gameState.lastFpsUpdate >= 1.0) { // Update every second
+        gameState.fps = Math.round(gameState.frameCount / (currentTime - gameState.lastFpsUpdate));
+        gameState.frameCount = 0;
+        gameState.lastFpsUpdate = currentTime;
+        
+        // Update game stats
+        updateGameStats();
+    }
+    
     // Update game if started and not game over
     if (gameState.gameStarted && !gameState.gameOver) {
         updateGame(delta);
@@ -368,10 +384,50 @@ function resetGame() {
     updateUI();
 }
 
+// Function to update game stats panel
+function updateGameStats() {
+    // Update FPS
+    document.getElementById('fps-value').textContent = gameState.fps;
+    
+    // Update server time (minutes:seconds since start)
+    const currentTime = Date.now();
+    const elapsedSeconds = Math.floor((currentTime - gameState.serverStartTime) / 1000);
+    const minutes = Math.floor(elapsedSeconds / 60).toString().padStart(2, '0');
+    const seconds = (elapsedSeconds % 60).toString().padStart(2, '0');
+    document.getElementById('time-value').textContent = `${minutes}:${seconds}`;
+    
+    // Update players online (random number between 15-25 for effect)
+    document.getElementById('players-value').textContent = Math.floor(Math.random() * 11) + 15;
+    
+    // Update health
+    const healthPercent = gameState.playerShip ? gameState.playerShip.health : 100;
+    document.getElementById('health-stat-value').textContent = `${healthPercent}%`;
+    
+    // Update balloons hit
+    document.getElementById('balloons-value').textContent = `${gameState.balloonsHit}/100`;
+    
+    // Update score
+    document.getElementById('score-stat-value').textContent = gameState.score;
+    
+    // Update ship stats if player ship exists
+    if (gameState.playerShip && gameState.playerShip.isLoaded) {
+        // Speed in knots (1 unit = 1 knot for simplicity)
+        const speed = Math.abs(Math.round(gameState.playerShip.speed * 10));
+        document.getElementById('speed-value').textContent = `${speed} kts`;
+        
+        // Throttle (percentage of max speed)
+        const throttlePercent = Math.round((Math.abs(gameState.playerShip.speed) / gameState.playerShip.maxSpeed) * 100);
+        document.getElementById('throttle-value').textContent = `${throttlePercent}%`;
+    }
+}
+
 // Function to update game UI
 function updateUI() {
     scoreValue.textContent = gameState.score;
-    healthValue.textContent = gameState.health;
+    healthValue.textContent = gameState.playerShip ? gameState.playerShip.health : 100;
+    
+    // Also update the game stats
+    updateGameStats();
 }
 
 // Make functions and variables available globally
