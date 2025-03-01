@@ -20,6 +20,7 @@ const gameState = {
     lastFpsUpdate: 0,
     frameCount: 0,
     balloonsHit: 0,
+    skittlesHit: 0, // Track skittles hit
     activePowerups: [], // Track active powerups
     serverStartTime: Date.now(),
     username: 'Player', // Default username
@@ -87,7 +88,7 @@ function init() {
     createEnvironment();
     
     // Initialize mountain generator
-    mountainGenerator = new MountainGenerator(scene);
+    mountainGenerator = new MountainGenerator(scene, 20);
     window.mountainGenerator = mountainGenerator; // Make available globally
     
     // Initialize login screen
@@ -159,6 +160,11 @@ function initLoginScreen() {
 function generateMountains() {
     // Generate mountains if not already generated
     if (!gameState.mountainsGenerated) {
+        mountainGenerator = new MountainGenerator(scene, 20);
+        
+        // Make mountain generator globally accessible
+        window.mountainGenerator = mountainGenerator;
+        
         mountainGenerator.generate();
         
         // Add standalone rock formations distributed across different sectors
@@ -745,10 +751,26 @@ function spawnPowerup() {
     window.spawnSeaObject('powerup');
 }
 
-// Make functions and variables available globally
-window.scene = scene;
-window.camera = camera;
-window.renderer = renderer;
-window.gameState = gameState;
-window.updateUI = updateUI;
-window.updateActivePowerupsUI = updateActivePowerupsUI; 
+// Sound effects
+const sounds = {
+    explosion: new Audio('sounds/explosion.mp3'),
+    hit: new Audio('sounds/hit.mp3'),
+    splash: new Audio('sounds/splash.mp3'),
+    powerup: new Audio('sounds/powerup.mp3'),
+    gameOver: new Audio('sounds/game_over.mp3'),
+    rockDestroy: new Audio('sounds/rock_break.mp3'), // Add sound for rock destruction
+    boost: new Audio('sounds/boost.mp3')
+};
+
+// Function to play sounds
+function playSound(soundName) {
+    if (sounds[soundName]) {
+        // Create a clone of the audio to allow overlapping sounds
+        const sound = sounds[soundName].cloneNode();
+        sound.volume = 0.3; // Lower volume
+        sound.play();
+    }
+}
+
+// Make sound function globally available
+window.playSound = playSound; 

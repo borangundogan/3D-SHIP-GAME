@@ -42,6 +42,7 @@ class Ship {
         this.turnSpeed = this.isPlayer ? 0.04 : 0.02;
         this.maxTurnRate = this.isPlayer ? 0.03 : 0.015;
         this.health = 100;
+        this.maxHealth = 100; // Track maximum health
         this.accelerationRate = 0.07;
         this.decelerationRate = 0.03;
         this.brakingRate = 0.08;
@@ -57,7 +58,8 @@ class Ship {
                     this.originalMaxSpeed = 1.8;
                     this.turnSpeed = 0.035;
                     this.maxTurnRate = 0.025;
-                    this.health = 70;
+                    this.health = 80;
+                    this.maxHealth = 80;
                     this.accelerationRate = 0.09;
                     this.hullColor = 0xff6600; // Orange
                     this.scale = 0.8;
@@ -69,7 +71,8 @@ class Ship {
                     this.originalMaxSpeed = 0.9;
                     this.turnSpeed = 0.015;
                     this.maxTurnRate = 0.012;
-                    this.health = 150;
+                    this.health = 250; // Increased from 150 to 250
+                    this.maxHealth = 250;
                     this.accelerationRate = 0.04;
                     this.hullColor = 0x990000; // Dark red
                     this.scale = 1.4;
@@ -81,7 +84,8 @@ class Ship {
                     this.originalMaxSpeed = 1.3;
                     this.turnSpeed = 0.025;
                     this.maxTurnRate = 0.018;
-                    this.health = 120;
+                    this.health = 180; // Increased from 120 to 180
+                    this.maxHealth = 180;
                     this.accelerationRate = 0.06;
                     this.hullColor = 0x009900; // Green
                     this.scale = 1.2;
@@ -93,7 +97,8 @@ class Ship {
                     this.originalMaxSpeed = 1.1;
                     this.turnSpeed = 0.03;
                     this.maxTurnRate = 0.022;
-                    this.health = 90;
+                    this.health = 120; // Increased from 90 to 120
+                    this.maxHealth = 120;
                     this.accelerationRate = 0.055;
                     this.hullColor = 0x333333; // Dark gray
                     this.scale = 0.9;
@@ -105,7 +110,8 @@ class Ship {
                     this.originalMaxSpeed = 0.8;
                     this.turnSpeed = 0.012;
                     this.maxTurnRate = 0.009;
-                    this.health = 180;
+                    this.health = 300; // Increased from 180 to 300
+                    this.maxHealth = 300;
                     this.accelerationRate = 0.03;
                     this.hullColor = 0x0066cc; // Blue
                     this.scale = 1.6;

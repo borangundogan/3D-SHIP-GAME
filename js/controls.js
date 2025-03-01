@@ -66,7 +66,7 @@ function handleKeyDown(event, playerShip) {
             keyStates.right = true;
             break;
         case ' ':
-        case 'f':
+        case 'p':
             keyStates.fire = true;
             break;
         // New controls

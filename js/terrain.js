@@ -26,6 +26,9 @@ class MountainGenerator {
         // Collision detection properties
         this.collisionEnabled = true; // Flag to enable/disable collision detection
         this.collisionBoundingBoxes = []; // Array to store bounding boxes for collision detection
+        
+        // Destructible rocks properties
+        this.destroyableRockSizeThreshold = 40; // Rocks smaller than this can be destroyed
     }
     
     generate() {
@@ -315,12 +318,26 @@ class MountainGenerator {
             // Add to scene
             this.scene.add(rockGroup);
             
+            // Determine rock health based on size
+            let rockHealth = 1; // Default for small rocks
+            
+            if (rockRadius >= 20) {
+                // Medium rocks take 2 hits
+                rockHealth = 2;
+            } else if (rockRadius >= 30) {
+                // Larger rocks take 3 hits
+                rockHealth = 3;
+            }
+            
             // Store reference for animation
             this.mountains.push({
                 mesh: rockGroup,
                 targetY: 0, // Final position at water level
                 speed: 0.05 + Math.random() * 0.2, // Slower rise speed than mountains
-                rising: true
+                rising: true,
+                isDestroyable: rockRadius < this.destroyableRockSizeThreshold, // Mark small rocks as destroyable
+                radius: rockRadius, // Store the radius for collision detection
+                health: rockHealth // Set health based on size
             });
         }
     }
@@ -433,12 +450,26 @@ class MountainGenerator {
             // Add to scene
             this.scene.add(rockGroup);
             
+            // Determine rock health based on size
+            let rockHealth = 1; // Default for small rocks
+            
+            if (rockRadius >= 20 && rockRadius < 30) {
+                // Medium rocks take 2 hits
+                rockHealth = 2;
+            } else if (rockRadius >= 30) {
+                // Larger rocks take 3 hits
+                rockHealth = 3;
+            }
+            
             // Store reference for animation
             this.mountains.push({
                 mesh: rockGroup,
                 targetY: 0,
                 speed: 0.05 + Math.random() * 0.15,
-                rising: true
+                rising: true,
+                isDestroyable: rockRadius < this.destroyableRockSizeThreshold, // Mark small rocks as destroyable
+                radius: rockRadius, // Store the radius for collision detection
+                health: rockHealth // Set health based on size
             });
         }
     }
@@ -470,7 +501,7 @@ class MountainGenerator {
                 
                 // Create a smaller bounding box (70% of original size)
                 // This makes the collision area smaller than the visual mountain
-                const shrinkFactor = 0.40;
+                const shrinkFactor = 0.30;
                 const shrunkSize = size.multiplyScalar(shrinkFactor);
                 
                 // Adjust the height to only cover the base of the mountain, not the snow cap
@@ -564,6 +595,228 @@ class MountainGenerator {
                 }
             }
         }
+    }
+
+    // Add a method to check if a projectile hits a destroyable rock
+    checkProjectileCollision(projectile) {
+        if (!projectile || !projectile.position) return false;
+        
+        // Only check mountains that have finished rising
+        for (let i = 0; i < this.mountains.length; i++) {
+            const mountain = this.mountains[i];
+            
+            // Skip mountains that are still rising or are not destroyable
+            if (mountain.rising || !mountain.isDestroyable) continue;
+            
+            // Simple distance-based collision detection for small rocks
+            const distance = projectile.position.distanceTo(mountain.mesh.position);
+            
+            // If the projectile is within the rock's radius, it's a hit
+            if (distance < mountain.radius * 1.5) {
+                // Reduce rock health
+                mountain.health -= 1;
+                
+                // Create a small hit effect
+                this.createRockHitEffect(mountain.mesh.position.clone(), mountain.radius);
+                
+                // Only destroy the rock if health reaches zero
+                if (mountain.health <= 0) {
+                    this.destroyRock(i);
+                }
+                
+                return true; // Return true to indicate projectile hit something
+            }
+        }
+        
+        return false;
+    }
+    
+    // Method to destroy a rock
+    destroyRock(index) {
+        const mountain = this.mountains[index];
+        
+        // Create explosion effect
+        this.createRockExplosion(mountain.mesh.position.clone(), mountain.radius);
+        
+        // Remove from scene
+        this.scene.remove(mountain.mesh);
+        
+        // Remove from mountains array
+        this.mountains.splice(index, 1);
+        
+        // Add points to score
+        if (window.gameState) {
+            window.gameState.score += 50;
+        }
+        
+        // Play sound if available
+        if (window.playSound && typeof window.playSound === 'function') {
+            window.playSound('rockDestroy');
+        }
+    }
+    
+    // Create explosion effect when a rock is destroyed
+    createRockExplosion(position, radius) {
+        // Create particle system for explosion
+        const particleCount = 20 + Math.floor(radius);
+        const particles = new THREE.Group();
+        
+        // Create particles
+        for (let i = 0; i < particleCount; i++) {
+            const size = Math.random() * 2 + 1;
+            const geometry = new THREE.SphereGeometry(size, 8, 8);
+            
+            // Use rock colors for particles
+            const colorIndex = Math.floor(Math.random() * this.mountainColors.length);
+            const material = new THREE.MeshBasicMaterial({
+                color: this.mountainColors[colorIndex],
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particle = new THREE.Mesh(geometry, material);
+            
+            // Position at explosion center
+            particle.position.copy(position);
+            
+            // Add to group
+            particles.add(particle);
+            
+            // Add random velocity
+            particle.userData.velocity = new THREE.Vector3(
+                (Math.random() - 0.5) * 10,
+                Math.random() * 15,
+                (Math.random() - 0.5) * 10
+            );
+            
+            // Add random lifetime
+            particle.userData.lifetime = Math.random() * 1 + 0.5;
+            particle.userData.age = 0;
+        }
+        
+        // Add particles to scene
+        this.scene.add(particles);
+        
+        // Animate particles
+        function animateExplosion() {
+            let allExpired = true;
+            
+            // Update particles
+            for (let i = 0; i < particles.children.length; i++) {
+                const particle = particles.children[i];
+                
+                // Update age
+                particle.userData.age += 1/60; // Assuming 60fps
+                
+                // Check if particle has expired
+                if (particle.userData.age >= particle.userData.lifetime) {
+                    particle.material.opacity = 0;
+                } else {
+                    allExpired = false;
+                    
+                    // Move particle
+                    particle.position.add(particle.userData.velocity.clone().multiplyScalar(1/60));
+                    
+                    // Apply gravity
+                    particle.userData.velocity.y -= 9.8 * (1/60);
+                    
+                    // Fade out
+                    particle.material.opacity = 0.8 * (1 - particle.userData.age / particle.userData.lifetime);
+                }
+            }
+            
+            // Remove particles if all have expired
+            if (allExpired) {
+                window.scene.remove(particles);
+                return;
+            }
+            
+            requestAnimationFrame(animateExplosion);
+        }
+        
+        animateExplosion();
+    }
+
+    // Create a small hit effect when a rock is hit but not destroyed
+    createRockHitEffect(position, radius) {
+        // Create a few particles for the hit effect
+        const particleCount = 5 + Math.floor(radius / 5);
+        const particles = new THREE.Group();
+        
+        // Create particles
+        for (let i = 0; i < particleCount; i++) {
+            const size = Math.random() * 1 + 0.5;
+            const geometry = new THREE.SphereGeometry(size, 8, 8);
+            
+            // Use rock colors for particles
+            const colorIndex = Math.floor(Math.random() * this.mountainColors.length);
+            const material = new THREE.MeshBasicMaterial({
+                color: this.mountainColors[colorIndex],
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particle = new THREE.Mesh(geometry, material);
+            
+            // Position at hit point
+            particle.position.copy(position);
+            
+            // Add to group
+            particles.add(particle);
+            
+            // Add random velocity (less than explosion)
+            particle.userData.velocity = new THREE.Vector3(
+                (Math.random() - 0.5) * 5,
+                Math.random() * 8,
+                (Math.random() - 0.5) * 5
+            );
+            
+            // Add random lifetime
+            particle.userData.lifetime = Math.random() * 0.5 + 0.3;
+            particle.userData.age = 0;
+        }
+        
+        // Add particles to scene
+        this.scene.add(particles);
+        
+        // Animate particles
+        function animateHitEffect() {
+            let allExpired = true;
+            
+            // Update particles
+            for (let i = 0; i < particles.children.length; i++) {
+                const particle = particles.children[i];
+                
+                // Update age
+                particle.userData.age += 1/60; // Assuming 60fps
+                
+                // Check if particle has expired
+                if (particle.userData.age >= particle.userData.lifetime) {
+                    particle.material.opacity = 0;
+                } else {
+                    allExpired = false;
+                    
+                    // Move particle
+                    particle.position.add(particle.userData.velocity.clone().multiplyScalar(1/60));
+                    
+                    // Apply gravity
+                    particle.userData.velocity.y -= 9.8 * (1/60);
+                    
+                    // Fade out
+                    particle.material.opacity = 0.8 * (1 - particle.userData.age / particle.userData.lifetime);
+                }
+            }
+            
+            // Remove particles if all have expired
+            if (allExpired) {
+                window.scene.remove(particles);
+                return;
+            }
+            
+            requestAnimationFrame(animateHitEffect);
+        }
+        
+        animateHitEffect();
     }
 }
 

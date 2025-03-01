@@ -5,7 +5,11 @@ class Projectile {
         this.direction = direction.normalize();
         this.speed = speed || 5;
         this.owner = owner; // 'player' or 'enemy'
-        this.damage = owner === 'player' ? 20 : 10;
+        
+        // Adjust damage based on owner
+        // Player projectiles do more damage than enemy projectiles
+        this.damage = owner === 'player' ? 25 : 15;
+        
         this.lifespan = 3; // seconds
         this.age = 0;
         this.isActive = true;
@@ -66,6 +70,9 @@ class Projectile {
     }
     
     checkCollisions() {
+        // Flag to track if we've hit something
+        let hasHit = false;
+        
         // Check collision with ships
         for (let i = 0; i < window.gameState.ships.length; i++) {
             const ship = window.gameState.ships[i];
@@ -87,78 +94,135 @@ class Projectile {
                     
                     // Destroy projectile
                     this.destroy();
-                    break;
+                    return; // Exit immediately after hit
                 }
                 continue;
             }
             
             // Check if projectile is within ship's bounding box
             if (ship.boundingBox && ship.boundingBox.containsPoint(this.position)) {
+                // Calculate damage based on ship type
+                let actualDamage = this.damage;
+                
+                // Adjust damage based on ship type (larger ships take less damage)
+                if (!ship.isPlayer) {
+                    switch(ship.shipType) {
+                        case 'destroyer':
+                            // Fragile ship takes more damage
+                            actualDamage = Math.ceil(this.damage * 1.2);
+                            break;
+                        case 'battleship':
+                            // Heavy ship takes less damage
+                            actualDamage = Math.ceil(this.damage * 0.6);
+                            break;
+                        case 'cruiser':
+                            // Balanced ship takes normal damage
+                            actualDamage = Math.ceil(this.damage * 0.8);
+                            break;
+                        case 'submarine':
+                            // Stealthy ship takes slightly less damage
+                            actualDamage = Math.ceil(this.damage * 0.9);
+                            break;
+                        case 'carrier':
+                            // Large ship takes much less damage
+                            actualDamage = Math.ceil(this.damage * 0.5);
+                            break;
+                        default:
+                            // Standard ship takes normal damage
+                            actualDamage = this.damage;
+                    }
+                }
+                
                 // Hit detected
-                ship.takeDamage(this.damage);
+                ship.takeDamage(actualDamage);
                 
                 // Update score if player hit an enemy
                 if (this.owner === 'player' && !ship.isPlayer) {
                     window.gameState.score += 10;
-                    window.updateUI();
-                    
-                    // If enemy is destroyed, add more points
-                    if (ship.health <= 0) {
-                        window.gameState.score += 50;
-                        window.updateUI();
-                    }
                 }
+                
+                // Create hit effect
+                createHitEffect(this.position);
                 
                 // Destroy projectile
                 this.destroy();
-                return;
+                return; // Exit immediately after hit
             }
         }
         
         // Check collision with sea objects (bombs and skittles)
-        if (this.owner === 'player') { // Only player projectiles can destroy sea objects
+        if (window.gameState.seaObjects) {
             for (let i = 0; i < window.gameState.seaObjects.length; i++) {
                 const seaObject = window.gameState.seaObjects[i];
                 
-                // Skip if sea object is not active or if it's a powerup (can't destroy powerups)
-                if (!seaObject.isActive || seaObject.type === 'powerup') {
-                    continue;
-                }
+                // Skip if sea object is not loaded
+                if (!seaObject.isLoaded) continue;
                 
-                // Check if projectile is within sea object's bounding box
-                if (seaObject.boundingBox && seaObject.boundingBox.containsPoint(this.position)) {
-                    // Hit detected - destroy the sea object
+                // Check if projectile is close to the sea object
+                if (this.position.distanceTo(seaObject.position) < seaObject.radius * 1.5) {
+                    // Hit detected
                     
-                    // Add points based on object type
+                    // Handle bomb hit
                     if (seaObject.type === 'bomb') {
-                        // More points for destroying bombs as they're dangerous
-                        window.gameState.score += 25;
-                        
-                        // Create explosion effect
+                        // Create explosion effect directly using our function
                         createExplosionEffect(seaObject.position.clone());
                         
-                        // Play explosion sound if available
-                        if (window.playSound && typeof window.playSound === 'function') {
-                            window.playSound('explosion');
+                        // Add points for shooting a bomb
+                        if (this.owner === 'player') {
+                            window.gameState.score += 25;
                         }
-                    } else if (seaObject.type === 'skittle') {
-                        // Fewer points for skittles
-                        window.gameState.score += 5;
                         
-                        // Create smaller effect for skittles
-                        createSkittleDestroyEffect(seaObject.position.clone());
+                        // Manually destroy the bomb since explode() might not be working
+                        // Remove from scene
+                        window.scene.remove(seaObject.mesh);
+                        
+                        // Remove light if it exists
+                        if (seaObject.light) {
+                            window.scene.remove(seaObject.light);
+                        }
+                        
+                        // Mark as inactive
+                        seaObject.isActive = false;
+                        
+                        // Remove from game state
+                        const index = window.gameState.seaObjects.indexOf(seaObject);
+                        if (index !== -1) {
+                            window.gameState.seaObjects.splice(index, 1);
+                        }
                     }
                     
-                    // Update UI
-                    window.updateUI();
+                    // Handle skittle hit
+                    if (seaObject.type === 'skittle') {
+                        // Destroy skittle
+                        seaObject.destroy();
+                        
+                        // Add points and update skittle counter
+                        if (this.owner === 'player') {
+                            window.gameState.score += 100;
+                            window.gameState.skittlesHit++;
+                        }
+                    }
                     
-                    // Destroy the sea object
-                    seaObject.destroy();
+                    // Create hit effect
+                    createHitEffect(this.position);
                     
                     // Destroy projectile
                     this.destroy();
-                    return;
+                    return; // Exit immediately after hit
                 }
+            }
+        }
+        
+        // Check collision with destroyable rocks
+        if (window.mountainGenerator && typeof window.mountainGenerator.checkProjectileCollision === 'function') {
+            // If the projectile hit a rock, it will be destroyed by the mountain generator
+            if (window.mountainGenerator.checkProjectileCollision(this)) {
+                // Create hit effect
+                createHitEffect(this.position);
+                
+                // Destroy projectile
+                this.destroy();
+                return; // Exit immediately after hit
             }
         }
     }
@@ -555,8 +619,93 @@ function createSkittleDestroyEffect(position) {
 }
 
 // Set global fire cooldown
-window.fireCooldown = 0.5; // seconds
+window.fireCooldown = 0.25; // seconds
 window.lastFireTime = 0;
+
+// Function to create a hit effect at a position
+function createHitEffect(position) {
+    // Create particle effect for hit
+    const particleCount = 15;
+    const particles = new THREE.Group();
+    
+    // Create particles
+    for (let i = 0; i < particleCount; i++) {
+        const size = Math.random() * 1 + 0.5;
+        const geometry = new THREE.SphereGeometry(size, 8, 8);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 1
+        });
+        
+        const particle = new THREE.Mesh(geometry, material);
+        
+        // Random position within hit radius
+        const radius = Math.random() * 3;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI;
+        
+        particle.position.set(
+            position.x + radius * Math.sin(phi) * Math.cos(theta),
+            position.y + radius * Math.sin(phi) * Math.sin(theta),
+            position.z + radius * Math.cos(phi)
+        );
+        
+        // Random velocity
+        particle.userData.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 5,
+            (Math.random() - 0.5) * 5,
+            (Math.random() - 0.5) * 5
+        );
+        
+        // Add to group
+        particles.add(particle);
+    }
+    
+    // Add hit light
+    const hitLight = new THREE.PointLight(0xffffff, 2, 10);
+    hitLight.position.copy(position);
+    window.scene.add(hitLight);
+    
+    // Add particles to scene
+    window.scene.add(particles);
+    
+    // Animate hit effect
+    let age = 0;
+    const duration = 0.5; // seconds
+    
+    function updateHitEffect() {
+        age += 1/60; // Assuming 60fps
+        
+        if (age >= duration) {
+            // Remove particles and light
+            window.scene.remove(particles);
+            window.scene.remove(hitLight);
+            return;
+        }
+        
+        // Update particles
+        const progress = age / duration;
+        hitLight.intensity = 2 * (1 - progress);
+        
+        for (let i = 0; i < particles.children.length; i++) {
+            const particle = particles.children[i];
+            
+            // Move particle
+            particle.position.add(particle.userData.velocity.clone().multiplyScalar(1/60));
+            
+            // Slow down
+            particle.userData.velocity.multiplyScalar(0.9);
+            
+            // Fade out
+            particle.material.opacity = 1 - progress;
+        }
+        
+        requestAnimationFrame(updateHitEffect);
+    }
+    
+    updateHitEffect();
+}
 
 // Make functions available globally
 window.Projectile = Projectile;
@@ -565,4 +714,5 @@ window.updateProjectiles = updateProjectiles;
 window.updateEnemyAI = updateEnemyAI;
 window.createShieldImpactEffect = createShieldImpactEffect;
 window.createExplosionEffect = createExplosionEffect;
-window.createSkittleDestroyEffect = createSkittleDestroyEffect; 
+window.createSkittleDestroyEffect = createSkittleDestroyEffect;
+window.createHitEffect = createHitEffect; 
