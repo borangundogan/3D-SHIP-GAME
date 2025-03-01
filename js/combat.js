@@ -111,7 +111,54 @@ class Projectile {
                 
                 // Destroy projectile
                 this.destroy();
-                break;
+                return;
+            }
+        }
+        
+        // Check collision with sea objects (bombs and skittles)
+        if (this.owner === 'player') { // Only player projectiles can destroy sea objects
+            for (let i = 0; i < window.gameState.seaObjects.length; i++) {
+                const seaObject = window.gameState.seaObjects[i];
+                
+                // Skip if sea object is not active or if it's a powerup (can't destroy powerups)
+                if (!seaObject.isActive || seaObject.type === 'powerup') {
+                    continue;
+                }
+                
+                // Check if projectile is within sea object's bounding box
+                if (seaObject.boundingBox && seaObject.boundingBox.containsPoint(this.position)) {
+                    // Hit detected - destroy the sea object
+                    
+                    // Add points based on object type
+                    if (seaObject.type === 'bomb') {
+                        // More points for destroying bombs as they're dangerous
+                        window.gameState.score += 25;
+                        
+                        // Create explosion effect
+                        createExplosionEffect(seaObject.position.clone());
+                        
+                        // Play explosion sound if available
+                        if (window.playSound && typeof window.playSound === 'function') {
+                            window.playSound('explosion');
+                        }
+                    } else if (seaObject.type === 'skittle') {
+                        // Fewer points for skittles
+                        window.gameState.score += 5;
+                        
+                        // Create smaller effect for skittles
+                        createSkittleDestroyEffect(seaObject.position.clone());
+                    }
+                    
+                    // Update UI
+                    window.updateUI();
+                    
+                    // Destroy the sea object
+                    seaObject.destroy();
+                    
+                    // Destroy projectile
+                    this.destroy();
+                    return;
+                }
             }
         }
     }
@@ -339,6 +386,174 @@ function createShieldImpactEffect(ship, impactPosition) {
     animateImpact();
 }
 
+// Function to create explosion effect when a bomb is destroyed
+function createExplosionEffect(position) {
+    // Create particle explosion
+    const particleCount = 30;
+    const particles = new THREE.Group();
+    
+    // Create particles
+    for (let i = 0; i < particleCount; i++) {
+        const size = Math.random() * 2 + 1;
+        const geometry = new THREE.SphereGeometry(size, 8, 8);
+        const material = new THREE.MeshBasicMaterial({
+            color: Math.random() > 0.5 ? 0xff5500 : 0xffaa00,
+            transparent: true,
+            opacity: 1
+        });
+        
+        const particle = new THREE.Mesh(geometry, material);
+        
+        // Random position within explosion radius
+        const radius = Math.random() * 5;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI;
+        
+        particle.position.set(
+            position.x + radius * Math.sin(phi) * Math.cos(theta),
+            position.y + radius * Math.sin(phi) * Math.sin(theta),
+            position.z + radius * Math.cos(phi)
+        );
+        
+        // Random velocity
+        particle.userData.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10
+        );
+        
+        // Add to group
+        particles.add(particle);
+    }
+    
+    // Add explosion light
+    const explosionLight = new THREE.PointLight(0xff5500, 3, 50);
+    explosionLight.position.copy(position);
+    window.scene.add(explosionLight);
+    
+    // Add particles to scene
+    window.scene.add(particles);
+    
+    // Animate explosion
+    let age = 0;
+    const duration = 1; // seconds
+    
+    function updateExplosion() {
+        age += 1/60; // Assuming 60fps
+        
+        if (age >= duration) {
+            // Remove particles and light
+            window.scene.remove(particles);
+            window.scene.remove(explosionLight);
+            return;
+        }
+        
+        // Update particles
+        const progress = age / duration;
+        explosionLight.intensity = 3 * (1 - progress);
+        
+        for (let i = 0; i < particles.children.length; i++) {
+            const particle = particles.children[i];
+            
+            // Move particle
+            particle.position.add(particle.userData.velocity.clone().multiplyScalar(1/60));
+            
+            // Slow down
+            particle.userData.velocity.multiplyScalar(0.95);
+            
+            // Fade out
+            particle.material.opacity = 1 - progress;
+            
+            // Grow slightly
+            particle.scale.multiplyScalar(1.01);
+        }
+        
+        requestAnimationFrame(updateExplosion);
+    }
+    
+    updateExplosion();
+}
+
+// Function to create effect when a skittle is destroyed
+function createSkittleDestroyEffect(position) {
+    // Create colorful particle burst
+    const particleCount = 15;
+    const particles = new THREE.Group();
+    
+    // Create particles with skittle colors
+    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
+    
+    for (let i = 0; i < particleCount; i++) {
+        const size = Math.random() * 1 + 0.5;
+        const geometry = new THREE.SphereGeometry(size, 8, 8);
+        const material = new THREE.MeshBasicMaterial({
+            color: colors[Math.floor(Math.random() * colors.length)],
+            transparent: true,
+            opacity: 1
+        });
+        
+        const particle = new THREE.Mesh(geometry, material);
+        
+        // Random position within burst radius
+        const radius = Math.random() * 3;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI;
+        
+        particle.position.set(
+            position.x + radius * Math.sin(phi) * Math.cos(theta),
+            position.y + radius * Math.sin(phi) * Math.sin(theta),
+            position.z + radius * Math.cos(phi)
+        );
+        
+        // Random velocity
+        particle.userData.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 5,
+            (Math.random() - 0.5) * 5 + 3, // Slight upward bias
+            (Math.random() - 0.5) * 5
+        );
+        
+        // Add to group
+        particles.add(particle);
+    }
+    
+    // Add to scene
+    window.scene.add(particles);
+    
+    // Animate burst
+    let age = 0;
+    const duration = 0.8; // seconds
+    
+    function updateBurst() {
+        age += 1/60; // Assuming 60fps
+        
+        if (age >= duration) {
+            // Remove particles
+            window.scene.remove(particles);
+            return;
+        }
+        
+        // Update particles
+        const progress = age / duration;
+        
+        for (let i = 0; i < particles.children.length; i++) {
+            const particle = particles.children[i];
+            
+            // Move particle
+            particle.position.add(particle.userData.velocity.clone().multiplyScalar(1/60));
+            
+            // Add gravity
+            particle.userData.velocity.y -= 9.8 * (1/60);
+            
+            // Fade out
+            particle.material.opacity = 1 - progress;
+        }
+        
+        requestAnimationFrame(updateBurst);
+    }
+    
+    updateBurst();
+}
+
 // Set global fire cooldown
 window.fireCooldown = 0.5; // seconds
 window.lastFireTime = 0;
@@ -348,4 +563,6 @@ window.Projectile = Projectile;
 window.fireProjectile = fireProjectile;
 window.updateProjectiles = updateProjectiles;
 window.updateEnemyAI = updateEnemyAI;
-window.createShieldImpactEffect = createShieldImpactEffect; 
+window.createShieldImpactEffect = createShieldImpactEffect;
+window.createExplosionEffect = createExplosionEffect;
+window.createSkittleDestroyEffect = createSkittleDestroyEffect; 

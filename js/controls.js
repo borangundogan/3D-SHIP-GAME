@@ -7,7 +7,8 @@ const keyStates = {
     fire: false,
     superTurbo: false,
     toggleCamera: false,
-    muteSound: false
+    muteSound: false,
+    turboBoost: false
 };
 
 // Make keyStates globally accessible
@@ -16,6 +17,13 @@ window.keyStates = keyStates;
 // Firing cooldown
 let lastFireTime = 0;
 const fireCooldown = 0.3; // seconds
+
+// Turbo boost properties
+let turboBoostActive = false;
+let turboBoostCooldown = 0;
+const turboBoostDuration = 3; // seconds
+const turboBoostCooldownTime = 8; // seconds
+const turboBoostSpeedMultiplier = 2.0; // Double speed during boost
 
 // Camera view state
 let cameraViewMode = 'follow'; // 'follow', 'cockpit', 'top'
@@ -63,8 +71,10 @@ function handleKeyDown(event, playerShip) {
             break;
         // New controls
         case 'shift':
-            if (event.location === KeyboardEvent.DOM_KEY_LOCATION_RIGHT) {
-                keyStates.superTurbo = true;
+            // Activate turbo boost if not on cooldown
+            if (!turboBoostActive && turboBoostCooldown <= 0) {
+                keyStates.turboBoost = true;
+                activateTurboBoost(playerShip);
             }
             break;
         case 'v':
@@ -109,9 +119,7 @@ function handleKeyUp(event, playerShip) {
             break;
         // New controls
         case 'shift':
-            if (event.location === KeyboardEvent.DOM_KEY_LOCATION_RIGHT) {
-                keyStates.superTurbo = false;
-            }
+            keyStates.turboBoost = false;
             break;
         case 'v':
             keyStates.toggleCamera = false;
@@ -143,6 +151,163 @@ function handleKeyUp(event, playerShip) {
     }
 }
 
+// Function to activate turbo boost
+function activateTurboBoost(playerShip) {
+    if (!playerShip || turboBoostActive) return;
+    
+    turboBoostActive = true;
+    
+    // Store original max speed
+    const originalMaxSpeed = playerShip.maxSpeed;
+    
+    // Increase max speed
+    playerShip.maxSpeed *= turboBoostSpeedMultiplier;
+    
+    // Create visual effect
+    createTurboBoostEffect(playerShip);
+    
+    // Add to active powerups display
+    if (window.gameState && window.gameState.activePowerups) {
+        window.gameState.activePowerups.push({
+            type: 'turboBoost',
+            duration: turboBoostDuration,
+            timeRemaining: turboBoostDuration
+        });
+    }
+    
+    // Update UI
+    if (window.updateActivePowerupsUI) {
+        window.updateActivePowerupsUI();
+    }
+    
+    // Play sound if available
+    if (window.playSound && typeof window.playSound === 'function') {
+        window.playSound('boost');
+    }
+    
+    // Reset after duration
+    setTimeout(() => {
+        // Reset speed
+        playerShip.maxSpeed = originalMaxSpeed;
+        
+        // Remove from active powerups
+        if (window.gameState && window.gameState.activePowerups) {
+            const index = window.gameState.activePowerups.findIndex(p => p.type === 'turboBoost');
+            if (index !== -1) {
+                window.gameState.activePowerups.splice(index, 1);
+            }
+        }
+        
+        // Update UI
+        if (window.updateActivePowerupsUI) {
+            window.updateActivePowerupsUI();
+        }
+        
+        // Set cooldown
+        turboBoostActive = false;
+        turboBoostCooldown = turboBoostCooldownTime;
+        
+    }, turboBoostDuration * 1000);
+}
+
+// Function to create visual effect for turbo boost
+function createTurboBoostEffect(ship) {
+    // Create particle trail
+    const particleCount = 50;
+    const particles = new THREE.Group();
+    
+    // Create particles
+    for (let i = 0; i < particleCount; i++) {
+        const size = Math.random() * 1 + 0.5;
+        const geometry = new THREE.SphereGeometry(size, 8, 8);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.7
+        });
+        
+        const particle = new THREE.Mesh(geometry, material);
+        
+        // Position behind the ship
+        particle.position.set(0, 0, -10 - Math.random() * 20);
+        
+        // Add to group
+        particles.add(particle);
+        
+        // Add random velocity
+        particle.userData.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 2,
+            (Math.random() - 0.5) * 2,
+            -Math.random() * 5 - 5
+        );
+        
+        // Add random lifetime
+        particle.userData.lifetime = Math.random() * 0.5 + 0.5;
+        particle.userData.age = 0;
+    }
+    
+    // Add particles to ship
+    ship.model.add(particles);
+    
+    // Add engine glow
+    const glowGeometry = new THREE.SphereGeometry(3, 16, 16);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.7
+    });
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    glow.position.set(0, 0, -8);
+    ship.model.add(glow);
+    
+    // Animate particles
+    function animateParticles() {
+        if (!turboBoostActive || !ship.model) {
+            // Remove particles and glow when boost ends
+            if (ship.model) {
+                ship.model.remove(particles);
+                ship.model.remove(glow);
+            }
+            return;
+        }
+        
+        // Update particles
+        for (let i = 0; i < particles.children.length; i++) {
+            const particle = particles.children[i];
+            
+            // Update age
+            particle.userData.age += 1/60; // Assuming 60fps
+            
+            // Remove if too old
+            if (particle.userData.age >= particle.userData.lifetime) {
+                // Reset particle
+                particle.position.set(0, 0, -10 - Math.random() * 5);
+                particle.userData.age = 0;
+                particle.userData.lifetime = Math.random() * 0.5 + 0.5;
+                particle.material.opacity = 0.7;
+            }
+            
+            // Move particle
+            particle.position.add(particle.userData.velocity.clone().multiplyScalar(1/60));
+            
+            // Fade out
+            particle.material.opacity = 0.7 * (1 - particle.userData.age / particle.userData.lifetime);
+        }
+        
+        // Pulse glow
+        glow.material.opacity = 0.5 + Math.sin(Date.now() / 100) * 0.3;
+        glow.scale.set(
+            1 + Math.sin(Date.now() / 120) * 0.2,
+            1 + Math.sin(Date.now() / 120) * 0.2,
+            1 + Math.sin(Date.now() / 120) * 0.2
+        );
+        
+        requestAnimationFrame(animateParticles);
+    }
+    
+    animateParticles();
+}
+
 // Reset all key states - can be called when focus is lost or when needed
 function resetKeyStates() {
     keyStates.forward = false;
@@ -153,6 +318,7 @@ function resetKeyStates() {
     keyStates.superTurbo = false;
     keyStates.toggleCamera = false;
     keyStates.muteSound = false;
+    keyStates.turboBoost = false;
 }
 
 // Add event listener for when window loses focus to reset key states
@@ -449,8 +615,14 @@ function updatePlayerControls(playerShip, delta) {
             left: keyStates.left,
             right: keyStates.right,
             fire: keyStates.fire,
-            superTurbo: keyStates.superTurbo
+            superTurbo: keyStates.superTurbo,
+            turboBoost: keyStates.turboBoost
         });
+    }
+    
+    // Update turbo boost cooldown
+    if (turboBoostCooldown > 0) {
+        turboBoostCooldown -= delta;
     }
     
     // Apply super turbo if active
@@ -572,4 +744,6 @@ function updateCameraPosition(playerShip) {
 
 // Make functions available globally
 window.initControls = initControls;
-window.updatePlayerControls = updatePlayerControls; 
+window.updatePlayerControls = updatePlayerControls;
+window.activateTurboBoost = activateTurboBoost;
+window.createTurboBoostEffect = createTurboBoostEffect; 

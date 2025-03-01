@@ -1,15 +1,16 @@
 // Ship class
 class Ship {
-    constructor(isPlayer = false) {
+    constructor(isPlayer = false, shipType = 'standard') {
         this.isPlayer = isPlayer;
-        this.maxSpeed = isPlayer ? 1.5 : 0.8;
-        this.originalMaxSpeed = isPlayer ? 1.5 : 0.8; // Store the original max speed
-        this.turnSpeed = isPlayer ? 0.03 : 0.015;
+        this.shipType = shipType; // Add ship type property
+        
+        // Set properties based on ship type
+        this.setShipProperties();
+        
         this.rotation = 0;
         this.speed = 0;
         this.targetSpeed = 0;
         this.direction = 0;
-        this.health = 100;
         this.position = new THREE.Vector3(0, 0, 0);
         this.mesh = null;
         this.model = null;
@@ -25,13 +26,92 @@ class Ship {
         // Turning acceleration and deceleration
         this.currentTurnRate = 0;      // Current turning rate (positive = left, negative = right)
         this.targetTurnRate = 0;       // Target turning rate
-        this.maxTurnRate = isPlayer ? 0.02 : 0.01; // Maximum turn rate (reduced from original turnSpeed)
         this.turnAccelerationRate = 0.001; // How quickly turning accelerates
         this.turnDecelerationRate = 0.002; // How quickly turning decelerates when no keys are pressed
         
         // Collision handling
         this.lastValidPosition = new THREE.Vector3(0, 0, 0);
         this.collisionCooldown = 0; // Cooldown timer for collision feedback
+    }
+    
+    // Set ship properties based on type
+    setShipProperties() {
+        // Default properties
+        this.maxSpeed = this.isPlayer ? 2.5 : 1.2;
+        this.originalMaxSpeed = this.maxSpeed;
+        this.turnSpeed = this.isPlayer ? 0.04 : 0.02;
+        this.maxTurnRate = this.isPlayer ? 0.03 : 0.015;
+        this.health = 100;
+        this.accelerationRate = 0.07;
+        this.decelerationRate = 0.03;
+        this.brakingRate = 0.08;
+        this.scale = 1.0;
+        this.hullColor = this.isPlayer ? 0x3366ff : 0xff3333;
+        
+        // Modify properties based on ship type
+        if (!this.isPlayer) {
+            switch(this.shipType) {
+                case 'destroyer':
+                    // Fast but fragile ship
+                    this.maxSpeed = 1.8;
+                    this.originalMaxSpeed = 1.8;
+                    this.turnSpeed = 0.035;
+                    this.maxTurnRate = 0.025;
+                    this.health = 70;
+                    this.accelerationRate = 0.09;
+                    this.hullColor = 0xff6600; // Orange
+                    this.scale = 0.8;
+                    break;
+                    
+                case 'battleship':
+                    // Slow but powerful ship
+                    this.maxSpeed = 0.9;
+                    this.originalMaxSpeed = 0.9;
+                    this.turnSpeed = 0.015;
+                    this.maxTurnRate = 0.012;
+                    this.health = 150;
+                    this.accelerationRate = 0.04;
+                    this.hullColor = 0x990000; // Dark red
+                    this.scale = 1.4;
+                    break;
+                    
+                case 'cruiser':
+                    // Balanced ship
+                    this.maxSpeed = 1.3;
+                    this.originalMaxSpeed = 1.3;
+                    this.turnSpeed = 0.025;
+                    this.maxTurnRate = 0.018;
+                    this.health = 120;
+                    this.accelerationRate = 0.06;
+                    this.hullColor = 0x009900; // Green
+                    this.scale = 1.2;
+                    break;
+                    
+                case 'submarine':
+                    // Stealthy ship
+                    this.maxSpeed = 1.1;
+                    this.originalMaxSpeed = 1.1;
+                    this.turnSpeed = 0.03;
+                    this.maxTurnRate = 0.022;
+                    this.health = 90;
+                    this.accelerationRate = 0.055;
+                    this.hullColor = 0x333333; // Dark gray
+                    this.scale = 0.9;
+                    break;
+                    
+                case 'carrier':
+                    // Large support ship
+                    this.maxSpeed = 0.8;
+                    this.originalMaxSpeed = 0.8;
+                    this.turnSpeed = 0.012;
+                    this.maxTurnRate = 0.009;
+                    this.health = 180;
+                    this.accelerationRate = 0.03;
+                    this.hullColor = 0x0066cc; // Blue
+                    this.scale = 1.6;
+                    break;
+            }
+        }
     }
     
     init() {
@@ -47,7 +127,7 @@ class Ship {
         // Hull
         const hullGeometry = new THREE.BoxGeometry(10, 3, 25);
         const hullMaterial = new THREE.MeshPhongMaterial({ 
-            color: this.isPlayer ? 0x3366ff : 0xff3333,
+            color: this.hullColor,
             shininess: 30
         });
         const hull = new THREE.Mesh(hullGeometry, hullMaterial);
@@ -99,28 +179,218 @@ class Ship {
             deckDetail.position.set(0, 3.2, 0);
             shipGroup.add(deckDetail);
         } else {
-            // Enemy ship details
-            // Add a different style bridge for enemy ships
-            const enemyTowerGeometry = new THREE.CylinderGeometry(2, 3, 6);
-            const enemyTowerMaterial = new THREE.MeshPhongMaterial({ color: 0x880000 });
-            const enemyTower = new THREE.Mesh(enemyTowerGeometry, enemyTowerMaterial);
-            enemyTower.position.set(0, 6, -5);
-            shipGroup.add(enemyTower);
-            
-            // Add enemy cannons (two smaller ones)
-            const enemyCannonGeometry = new THREE.CylinderGeometry(0.6, 0.8, 8);
-            const enemyCannonMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
-            
-            const leftCannon = new THREE.Mesh(enemyCannonGeometry, enemyCannonMaterial);
-            leftCannon.rotation.x = Math.PI / 2;
-            leftCannon.position.set(-3, 3, 6);
-            shipGroup.add(leftCannon);
-            
-            const rightCannon = new THREE.Mesh(enemyCannonGeometry, enemyCannonMaterial);
-            rightCannon.rotation.x = Math.PI / 2;
-            rightCannon.position.set(3, 3, 6);
-            shipGroup.add(rightCannon);
+            // Add ship-type specific details for enemy ships
+            switch(this.shipType) {
+                case 'destroyer':
+                    // Sleek, fast destroyer with dual cannons
+                    // Make hull more streamlined
+                    hull.scale.set(0.8, 0.8, 1.1);
+                    
+                    // Smaller bridge
+                    bridge.scale.set(0.8, 0.8, 0.8);
+                    bridge.position.y = 4;
+                    
+                    // Dual smaller cannons
+                    const destroyerLeftCannonGeometry = new THREE.CylinderGeometry(0.5, 0.6, 12);
+                    const destroyerLeftCannon = new THREE.Mesh(destroyerLeftCannonGeometry, cannonMaterial);
+                    destroyerLeftCannon.rotation.x = Math.PI / 2;
+                    destroyerLeftCannon.position.set(-2, 3, 8);
+                    shipGroup.add(destroyerLeftCannon);
+                    
+                    const destroyerRightCannonGeometry = new THREE.CylinderGeometry(0.5, 0.6, 12);
+                    const destroyerRightCannon = new THREE.Mesh(destroyerRightCannonGeometry, cannonMaterial);
+                    destroyerRightCannon.rotation.x = Math.PI / 2;
+                    destroyerRightCannon.position.set(2, 3, 8);
+                    shipGroup.add(destroyerRightCannon);
+                    
+                    // Remove the central cannon
+                    shipGroup.remove(cannon);
+                    break;
+                    
+                case 'battleship':
+                    // Massive battleship with heavy armor and large cannons
+                    // Wider, taller hull
+                    hull.scale.set(1.3, 1.2, 1.2);
+                    
+                    // Larger bridge
+                    bridge.scale.set(1.2, 1.3, 1.2);
+                    bridge.position.y = 6;
+                    
+                    // Triple heavy cannons
+                    const mainCannonGeometry = new THREE.CylinderGeometry(1.2, 1.5, 14);
+                    const mainCannon = new THREE.Mesh(mainCannonGeometry, cannonMaterial);
+                    mainCannon.rotation.x = Math.PI / 2;
+                    mainCannon.position.set(0, 5, 10);
+                    shipGroup.add(mainCannon);
+                    
+                    const leftHeavyCannonGeometry = new THREE.CylinderGeometry(1, 1.2, 12);
+                    const leftHeavyCannon = new THREE.Mesh(leftHeavyCannonGeometry, cannonMaterial);
+                    leftHeavyCannon.rotation.x = Math.PI / 2;
+                    leftHeavyCannon.position.set(-4, 4, 6);
+                    shipGroup.add(leftHeavyCannon);
+                    
+                    const rightHeavyCannonGeometry = new THREE.CylinderGeometry(1, 1.2, 12);
+                    const rightHeavyCannon = new THREE.Mesh(rightHeavyCannonGeometry, cannonMaterial);
+                    rightHeavyCannon.rotation.x = Math.PI / 2;
+                    rightHeavyCannon.position.set(4, 4, 6);
+                    shipGroup.add(rightHeavyCannon);
+                    
+                    // Remove the original cannon
+                    shipGroup.remove(cannon);
+                    
+                    // Add armor plates
+                    const armorGeometry = new THREE.BoxGeometry(12, 4, 28);
+                    const armorMaterial = new THREE.MeshPhongMaterial({ 
+                        color: 0x555555,
+                        shininess: 10
+                    });
+                    const armor = new THREE.Mesh(armorGeometry, armorMaterial);
+                    armor.position.y = 1;
+                    armor.scale.set(0.95, 0.5, 0.95);
+                    shipGroup.add(armor);
+                    break;
+                    
+                case 'cruiser':
+                    // Medium-sized cruiser with balanced features
+                    // Slightly larger hull
+                    hull.scale.set(1.1, 1, 1.1);
+                    
+                    // Modified bridge
+                    bridge.scale.set(1, 1.2, 1);
+                    bridge.position.y = 5.5;
+                    
+                    // Dual medium cannons
+                    const frontCannonGeometry = new THREE.CylinderGeometry(0.9, 1.1, 12);
+                    const frontCannon = new THREE.Mesh(frontCannonGeometry, cannonMaterial);
+                    frontCannon.rotation.x = Math.PI / 2;
+                    frontCannon.position.set(0, 4, 10);
+                    shipGroup.add(frontCannon);
+                    
+                    const rearCannonGeometry = new THREE.CylinderGeometry(0.9, 1.1, 10);
+                    const rearCannon = new THREE.Mesh(rearCannonGeometry, cannonMaterial);
+                    rearCannon.rotation.x = Math.PI / 2;
+                    rearCannon.position.set(0, 4, -8);
+                    shipGroup.add(rearCannon);
+                    
+                    // Remove the original cannon
+                    shipGroup.remove(cannon);
+                    
+                    // Add radar tower
+                    const radarTowerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 4);
+                    const radarTowerMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
+                    const radarTower = new THREE.Mesh(radarTowerGeometry, radarTowerMaterial);
+                    radarTower.position.set(0, 8, -4);
+                    shipGroup.add(radarTower);
+                    
+                    const cruiserRadarGeometry = new THREE.SphereGeometry(1, 8, 8, 0, Math.PI);
+                    const cruiserRadarMaterial = new THREE.MeshPhongMaterial({ color: 0xCCCCCC });
+                    const cruiserRadar = new THREE.Mesh(cruiserRadarGeometry, cruiserRadarMaterial);
+                    cruiserRadar.rotation.x = Math.PI / 2;
+                    cruiserRadar.position.set(0, 10, -4);
+                    shipGroup.add(cruiserRadar);
+                    break;
+                    
+                case 'submarine':
+                    // Low-profile submarine with torpedo tubes
+                    // Lower, sleeker hull
+                    hull.scale.set(0.9, 0.7, 1.2);
+                    hull.position.y = 0.5;
+                    
+                    // Conning tower instead of bridge
+                    bridge.scale.set(0.6, 1.5, 0.6);
+                    bridge.position.y = 3;
+                    
+                    // Torpedo tubes instead of cannon
+                    const torpedoTubeGeometry = new THREE.BoxGeometry(8, 2, 4);
+                    const torpedoTubeMaterial = new THREE.MeshPhongMaterial({ 
+                        color: 0x444444,
+                        shininess: 30
+                    });
+                    const torpedoTube = new THREE.Mesh(torpedoTubeGeometry, torpedoTubeMaterial);
+                    torpedoTube.position.set(0, 1.5, 10);
+                    shipGroup.add(torpedoTube);
+                    
+                    // Remove the original cannon
+                    shipGroup.remove(cannon);
+                    
+                    // Add periscope
+                    const periscopeGeometry = new THREE.CylinderGeometry(0.2, 0.2, 3);
+                    const periscopeMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+                    const periscope = new THREE.Mesh(periscopeGeometry, periscopeMaterial);
+                    periscope.position.set(0, 6, -1);
+                    shipGroup.add(periscope);
+                    break;
+                    
+                case 'carrier':
+                    // Large aircraft carrier with flat deck
+                    // Wider, longer hull
+                    hull.scale.set(1.5, 0.9, 1.4);
+                    
+                    // Island bridge on the side
+                    bridge.scale.set(0.7, 1.5, 0.8);
+                    bridge.position.set(4, 6, -5);
+                    
+                    // Flight deck
+                    const flightDeckGeometry = new THREE.BoxGeometry(9, 0.5, 30);
+                    const flightDeckMaterial = new THREE.MeshPhongMaterial({ 
+                        color: 0x333333,
+                        shininess: 10
+                    });
+                    const flightDeck = new THREE.Mesh(flightDeckGeometry, flightDeckMaterial);
+                    flightDeck.position.set(0, 3.5, 0);
+                    shipGroup.add(flightDeck);
+                    
+                    // Remove the original cannon
+                    shipGroup.remove(cannon);
+                    
+                    // Add radar and communications equipment
+                    const carrierRadarGeometry = new THREE.CylinderGeometry(0.8, 0.8, 2);
+                    const carrierRadarMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
+                    const carrierRadar = new THREE.Mesh(carrierRadarGeometry, carrierRadarMaterial);
+                    carrierRadar.position.set(4, 9, -5);
+                    shipGroup.add(carrierRadar);
+                    
+                    // Add aircraft on deck (simplified)
+                    for (let i = 0; i < 3; i++) {
+                        const aircraftGeometry = new THREE.BoxGeometry(2, 0.5, 3);
+                        const aircraftMaterial = new THREE.MeshPhongMaterial({ 
+                            color: 0x555555,
+                            shininess: 20
+                        });
+                        const aircraft = new THREE.Mesh(aircraftGeometry, aircraftMaterial);
+                        aircraft.position.set(Math.random() * 6 - 3, 3.8, i * 8 - 10);
+                        aircraft.rotation.y = Math.random() * Math.PI / 4 - Math.PI / 8;
+                        shipGroup.add(aircraft);
+                    }
+                    break;
+                    
+                default:
+                    // Standard enemy ship (original design)
+                    // Add a different style bridge for enemy ships
+                    const enemyTowerGeometry = new THREE.CylinderGeometry(2, 3, 6);
+                    const enemyTowerMaterial = new THREE.MeshPhongMaterial({ color: 0x880000 });
+                    const enemyTower = new THREE.Mesh(enemyTowerGeometry, enemyTowerMaterial);
+                    enemyTower.position.set(0, 6, -5);
+                    shipGroup.add(enemyTower);
+                    
+                    // Add enemy cannons (two smaller ones)
+                    const enemyCannonGeometry = new THREE.CylinderGeometry(0.6, 0.8, 8);
+                    const enemyCannonMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
+                    
+                    const standardLeftCannon = new THREE.Mesh(enemyCannonGeometry, enemyCannonMaterial);
+                    standardLeftCannon.rotation.x = Math.PI / 2;
+                    standardLeftCannon.position.set(-3, 3, 6);
+                    shipGroup.add(standardLeftCannon);
+                    
+                    const standardRightCannon = new THREE.Mesh(enemyCannonGeometry, enemyCannonMaterial);
+                    standardRightCannon.rotation.x = Math.PI / 2;
+                    standardRightCannon.position.set(3, 3, 6);
+                    shipGroup.add(standardRightCannon);
+            }
         }
+        
+        // Apply overall scaling based on ship type
+        shipGroup.scale.set(this.scale, this.scale, this.scale);
         
         this.model = shipGroup;
         this.model.position.copy(this.position);
@@ -521,12 +791,30 @@ function createPlayerShip() {
 }
 
 // Function to create enemy ship
-function createEnemyShip(position) {
-    const randomRotation = new THREE.Euler(0, Math.random() * Math.PI * 2, 0);
-    return new Ship(false);
+function createEnemyShip(position, shipType) {
+    // If no ship type is specified, randomly select one
+    if (!shipType) {
+        const shipTypes = ['standard', 'destroyer', 'battleship', 'cruiser', 'submarine', 'carrier'];
+        shipType = shipTypes[Math.floor(Math.random() * shipTypes.length)];
+    }
+    
+    const ship = new Ship(false, shipType);
+    
+    // Set position if provided
+    if (position) {
+        ship.position.copy(position);
+    }
+    
+    return ship;
+}
+
+// Function to create a specific type of enemy ship
+function createSpecificEnemyShip(position, shipType) {
+    return createEnemyShip(position, shipType);
 }
 
 // Make functions available globally
 window.Ship = Ship;
 window.createPlayerShip = createPlayerShip;
-window.createEnemyShip = createEnemyShip; 
+window.createEnemyShip = createEnemyShip;
+window.createSpecificEnemyShip = createSpecificEnemyShip; 

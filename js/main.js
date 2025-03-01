@@ -11,7 +11,7 @@ const gameState = {
     enemySpawnTimer: 0,
     enemySpawnInterval: 10, // seconds
     seaObjectSpawnTimer: 0, // Add timer for sea objects
-    seaObjectSpawnInterval: 5, // seconds
+    seaObjectSpawnInterval: 2.5, // seconds - reduced from 5 seconds for more frequent spawns
     powerupSpawnTimer: 0, // Add timer for powerups
     powerupSpawnInterval: 15, // seconds - less frequent than other objects
     gameStarted: false,
@@ -23,7 +23,10 @@ const gameState = {
     activePowerups: [], // Track active powerups
     serverStartTime: Date.now(),
     username: 'Player', // Default username
-    mountainsGenerated: false // Track if mountains have been generated
+    mountainsGenerated: false, // Track if mountains have been generated
+    shipTypes: ['standard', 'destroyer', 'battleship', 'cruiser', 'submarine', 'carrier'], // Available ship types
+    shipTypeCounts: {}, // Track how many of each ship type are spawned
+    initialShipsSpawned: false // Track if initial ships have been spawned
 };
 
 // DOM elements
@@ -343,14 +346,31 @@ function animate() {
 
 // Game update function
 function updateGame(delta) {
-    // Debug output
-    if (window.debugControls) {
-        console.log("Game update frame, delta:", delta);
+    // Skip if game is not started or is over
+    if (!gameState.gameStarted || gameState.gameOver) return;
+    
+    // Update player ship
+    if (gameState.playerShip && gameState.playerShip.isLoaded) {
+        // Update player controls
+        updatePlayerControls(gameState.playerShip, delta);
+        
+        // Update camera position
+        updateCameraPosition(gameState.playerShip);
+        
+        // Update username label position
+        updateUsernameLabel(gameState.playerShip);
     }
     
-    // Update player controls
-    if (gameState.playerShip) {
-        updatePlayerControls(gameState.playerShip, delta);
+    // Spawn initial ships if not already done
+    if (!gameState.initialShipsSpawned && gameState.playerShip && gameState.playerShip.isLoaded) {
+        spawnMultipleShips(30); // Spawn 30 ships of different types
+    }
+    
+    // Update enemy spawn timer
+    gameState.enemySpawnTimer += delta;
+    if (gameState.enemySpawnTimer >= gameState.enemySpawnInterval) {
+        spawnEnemy();
+        gameState.enemySpawnTimer = 0;
     }
     
     // Update all ships
@@ -370,15 +390,6 @@ function updateGame(delta) {
     
     // Update enemy AI
     window.updateEnemyAI(delta);
-    
-    // Spawn enemies
-    gameState.enemySpawnTimer += delta;
-    if (gameState.enemySpawnTimer >= gameState.enemySpawnInterval) {
-        spawnEnemy();
-        gameState.enemySpawnTimer = 0;
-        // Make enemies spawn faster as the game progresses
-        gameState.enemySpawnInterval = Math.max(3, gameState.enemySpawnInterval * 0.95);
-    }
     
     // Spawn sea objects
     gameState.seaObjectSpawnTimer += delta;
@@ -410,6 +421,62 @@ function spawnEnemy() {
         const enemy = createEnemyShip(new THREE.Vector3(x, 0, z));
         enemy.init(); // Initialize the enemy ship
     }
+}
+
+// Function to spawn multiple ships of different types
+function spawnMultipleShips(count = 30) {
+    if (!gameState.playerShip || !gameState.playerShip.isLoaded) return;
+    
+    console.log("Spawning multiple ships of different types...");
+    
+    // Reset ship type counts
+    gameState.shipTypeCounts = {};
+    gameState.shipTypes.forEach(type => {
+        gameState.shipTypeCounts[type] = 0;
+    });
+    
+    // Calculate how many of each type to spawn (equal distribution)
+    const shipsPerType = Math.floor(count / gameState.shipTypes.length);
+    const remainder = count % gameState.shipTypes.length;
+    
+    // Spawn ships in a grid pattern around the map
+    const mapRadius = 1500; // Large area around the player
+    const gridSize = Math.ceil(Math.sqrt(count)); // Calculate grid dimensions
+    
+    let shipIndex = 0;
+    
+    // Spawn equal numbers of each ship type
+    for (let type of gameState.shipTypes) {
+        // Determine how many of this type to spawn
+        let typeCount = shipsPerType;
+        if (remainder > 0 && gameState.shipTypeCounts[type] < shipsPerType) {
+            typeCount++;
+        }
+        
+        for (let i = 0; i < typeCount; i++) {
+            // Calculate position in a grid pattern
+            const row = Math.floor(shipIndex / gridSize);
+            const col = shipIndex % gridSize;
+            
+            // Convert grid position to world coordinates
+            const gridSpacing = (mapRadius * 2) / gridSize;
+            const x = -mapRadius + col * gridSpacing + Math.random() * 100 - 50;
+            const z = -mapRadius + row * gridSpacing + Math.random() * 100 - 50;
+            
+            // Create the ship
+            const position = new THREE.Vector3(x, 0, z);
+            const enemy = createSpecificEnemyShip(position, type);
+            enemy.init();
+            
+            // Track the ship type
+            gameState.shipTypeCounts[type] = (gameState.shipTypeCounts[type] || 0) + 1;
+            
+            shipIndex++;
+        }
+    }
+    
+    console.log("Spawned ships by type:", gameState.shipTypeCounts);
+    gameState.initialShipsSpawned = true;
 }
 
 function gameOver() {
@@ -542,7 +609,7 @@ function resetGame() {
     gameState.enemySpawnTimer = 0;
     gameState.enemySpawnInterval = 10;
     gameState.seaObjectSpawnTimer = 0;
-    gameState.seaObjectSpawnInterval = 5;
+    gameState.seaObjectSpawnInterval = 2.5;
     gameState.powerupSpawnTimer = 0;
     gameState.powerupSpawnInterval = 15;
     gameState.balloonsHit = 0;
@@ -662,8 +729,8 @@ function spawnRandomSeaObject() {
     // Skip if player ship doesn't exist or isn't loaded
     if (!gameState.playerShip || !gameState.playerShip.isLoaded) return;
     
-    // Randomly choose between bomb and skittle
-    const type = Math.random() < 0.3 ? 'bomb' : 'skittle';
+    // Randomly choose between bomb and skittle with higher chance for bombs
+    const type = Math.random() < 0.5 ? 'bomb' : 'skittle'; // Increased bomb chance from 0.3 to 0.5
     
     // Spawn the sea object
     window.spawnSeaObject(type);

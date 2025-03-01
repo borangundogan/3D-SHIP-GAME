@@ -470,7 +470,7 @@ class MountainGenerator {
                 
                 // Create a smaller bounding box (70% of original size)
                 // This makes the collision area smaller than the visual mountain
-                const shrinkFactor = 0.45;
+                const shrinkFactor = 0.40;
                 const shrunkSize = size.multiplyScalar(shrinkFactor);
                 
                 // Adjust the height to only cover the base of the mountain, not the snow cap
