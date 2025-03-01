@@ -439,8 +439,18 @@ function updateGameStats() {
         document.getElementById('speed-value').textContent = `${speed} kts`;
         
         // Throttle (percentage of max speed)
-        const throttlePercent = Math.round((Math.abs(gameState.playerShip.speed) / gameState.playerShip.maxSpeed) * 100);
+        const throttlePercent = Math.round((Math.abs(gameState.playerShip.targetSpeed) / gameState.playerShip.maxSpeed) * 100);
         document.getElementById('throttle-value').textContent = `${throttlePercent}%`;
+        
+        // Turn rate (direction and percentage)
+        const turnDirection = gameState.playerShip.currentTurnRate > 0 ? 'LEFT' : gameState.playerShip.currentTurnRate < 0 ? 'RIGHT' : 'CENTER';
+        const turnPercent = Math.round((Math.abs(gameState.playerShip.currentTurnRate) / gameState.playerShip.maxTurnRate) * 100);
+        
+        // Update turn indicator if it exists
+        const turnElement = document.getElementById('turn-value');
+        if (turnElement) {
+            turnElement.textContent = turnPercent > 0 ? `${turnDirection} ${turnPercent}%` : 'CENTER';
+        }
     }
 }
 

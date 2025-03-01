@@ -190,11 +190,17 @@ function updateEnemyAI(delta) {
             const cross = new THREE.Vector3().crossVectors(shipForward, directionToPlayer);
             const turnDirection = cross.y > 0 ? 1 : -1;
             
-            // Turn towards player
-            ship.rotation += turnDirection * ship.turnSpeed;
+            // Turn towards player using the new turning system
+            if (turnDirection > 0) {
+                ship.turnLeft(0.8); // Turn left at 80% speed for smoother enemy movement
+            } else {
+                ship.turnRight(0.8); // Turn right at 80% speed
+            }
             
-            // Move forward
-            ship.moveForward();
+            // Move forward with speed based on distance
+            // Slow down when getting closer to player for better combat
+            const speedFactor = Math.min(1.0, distanceToPlayer / 100);
+            ship.moveForward(speedFactor);
             
             // Fire at player if facing them
             if (angleToPlayer < 0.3) { // About 17 degrees
@@ -208,10 +214,18 @@ function updateEnemyAI(delta) {
         } else {
             // Move randomly if not in range
             if (Math.random() < 0.01) {
-                ship.rotation += (Math.random() - 0.5) * 0.2;
+                // Random turning
+                const randomTurn = Math.random();
+                if (randomTurn < 0.33) {
+                    ship.turnLeft(0.5);
+                } else if (randomTurn < 0.66) {
+                    ship.turnRight(0.5);
+                } else {
+                    ship.stopTurning();
+                }
             }
             
-            // Move forward
+            // Move forward at full speed when far from player
             ship.moveForward();
         }
     }

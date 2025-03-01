@@ -122,9 +122,23 @@ function handleKeyUp(event, playerShip) {
     }
     
     // If the player ship exists and this is a movement key, ensure the ship stops if no movement keys are pressed
-    if (playerShip && ['w', 's', 'arrowup', 'arrowdown'].includes(event.key.toLowerCase())) {
-        if (!keyStates.forward && !keyStates.backward) {
-            playerShip.stopMoving();
+    if (playerShip) {
+        // Handle forward/backward movement
+        if (['w', 's', 'arrowup', 'arrowdown'].includes(event.key.toLowerCase())) {
+            if (!keyStates.forward && !keyStates.backward) {
+                playerShip.stopMoving();
+            }
+        }
+        
+        // Handle turning
+        if (['a', 'd', 'arrowleft', 'arrowright'].includes(event.key.toLowerCase())) {
+            if (!keyStates.left && !keyStates.right) {
+                playerShip.stopTurning();
+            } else if (keyStates.left) {
+                playerShip.turnLeft();
+            } else if (keyStates.right) {
+                playerShip.turnRight();
+            }
         }
     }
 }
@@ -197,6 +211,11 @@ function initMobileControls(playerShip) {
         forwardBtn.addEventListener('touchend', (e) => {
             e.preventDefault(); // Prevent default behavior
             keyStates.forward = false;
+            if (playerShip) {
+                if (!keyStates.backward) {
+                    playerShip.stopMoving();
+                }
+            }
         }, { passive: false });
         
         // Backward button
@@ -208,6 +227,11 @@ function initMobileControls(playerShip) {
         backwardBtn.addEventListener('touchend', (e) => {
             e.preventDefault(); // Prevent default behavior
             keyStates.backward = false;
+            if (playerShip) {
+                if (!keyStates.forward) {
+                    playerShip.stopMoving();
+                }
+            }
         }, { passive: false });
         
         // Left button
@@ -219,6 +243,13 @@ function initMobileControls(playerShip) {
         leftBtn.addEventListener('touchend', (e) => {
             e.preventDefault(); // Prevent default behavior
             keyStates.left = false;
+            if (playerShip) {
+                if (!keyStates.right) {
+                    playerShip.stopTurning();
+                } else {
+                    playerShip.turnRight();
+                }
+            }
         }, { passive: false });
         
         // Right button
@@ -230,6 +261,13 @@ function initMobileControls(playerShip) {
         rightBtn.addEventListener('touchend', (e) => {
             e.preventDefault(); // Prevent default behavior
             keyStates.right = false;
+            if (playerShip) {
+                if (!keyStates.left) {
+                    playerShip.stopTurning();
+                } else {
+                    playerShip.turnLeft();
+                }
+            }
         }, { passive: false });
         
         // Fire button
@@ -250,6 +288,12 @@ function initMobileControls(playerShip) {
             keyStates.left = false;
             keyStates.right = false;
             keyStates.fire = false;
+            
+            // Stop all movement and turning
+            if (playerShip) {
+                playerShip.stopMoving();
+                playerShip.stopTurning();
+            }
         };
         
         forwardBtn.addEventListener('touchcancel', handleTouchCancel);
@@ -412,7 +456,7 @@ function updatePlayerControls(playerShip, delta) {
     // Apply super turbo if active
     const speedMultiplier = keyStates.superTurbo ? 2.0 : 1.0;
     
-    // Handle movement - ensure ship stops if no movement keys are pressed
+    // Handle movement - set target speed based on key states
     if (keyStates.forward) {
         if (window.debugControls) console.log("Moving forward");
         playerShip.moveForward(speedMultiplier);
@@ -424,13 +468,13 @@ function updatePlayerControls(playerShip, delta) {
         playerShip.stopMoving();
     }
     
-    // Handle turning
-    if (keyStates.left) {
+    // Handle turning - set target turn rate based on key states
+    if (keyStates.left && !keyStates.right) {
         playerShip.turnLeft(speedMultiplier);
-    }
-    
-    if (keyStates.right) {
+    } else if (keyStates.right && !keyStates.left) {
         playerShip.turnRight(speedMultiplier);
+    } else {
+        playerShip.stopTurning();
     }
     
     // Handle firing
@@ -440,11 +484,6 @@ function updatePlayerControls(playerShip, delta) {
             window.fireProjectile(playerShip);
             lastFireTime = currentTime;
         }
-    }
-    
-    // Safety check - if ship is moving but no movement keys are pressed, stop the ship
-    if (playerShip.speed !== 0 && !keyStates.forward && !keyStates.backward) {
-        playerShip.stopMoving();
     }
     
     // Update camera to follow player based on current view mode
