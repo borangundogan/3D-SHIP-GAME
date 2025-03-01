@@ -12,12 +12,15 @@ const gameState = {
     enemySpawnInterval: 10, // seconds
     seaObjectSpawnTimer: 0, // Add timer for sea objects
     seaObjectSpawnInterval: 5, // seconds
+    powerupSpawnTimer: 0, // Add timer for powerups
+    powerupSpawnInterval: 15, // seconds - less frequent than other objects
     gameStarted: false,
     gameOver: false,
     fps: 0,
     lastFpsUpdate: 0,
     frameCount: 0,
     balloonsHit: 0,
+    activePowerups: [], // Track active powerups
     serverStartTime: Date.now()
 };
 
@@ -281,6 +284,13 @@ function updateGame(delta) {
         gameState.seaObjectSpawnTimer = 0;
     }
     
+    // Spawn powerups
+    gameState.powerupSpawnTimer += delta;
+    if (gameState.powerupSpawnTimer >= gameState.powerupSpawnInterval) {
+        spawnPowerup();
+        gameState.powerupSpawnTimer = 0;
+    }
+    
     // Update UI
     updateUI();
 }
@@ -425,6 +435,8 @@ function resetGame() {
     gameState.enemySpawnInterval = 10;
     gameState.seaObjectSpawnTimer = 0;
     gameState.seaObjectSpawnInterval = 5;
+    gameState.powerupSpawnTimer = 0;
+    gameState.powerupSpawnInterval = 15;
     gameState.balloonsHit = 0;
     
     // Create new player ship
@@ -467,6 +479,10 @@ function updateGameStats() {
         if (gameState.playerShip.maxSpeed < gameState.playerShip.originalMaxSpeed) {
             document.getElementById('speed-value').style.color = '#00AAFF';
             document.getElementById('throttle-value').style.color = '#00AAFF';
+        } else if (gameState.playerShip.maxSpeed > gameState.playerShip.originalMaxSpeed) {
+            // Show speed boost
+            document.getElementById('speed-value').style.color = '#FFFF00';
+            document.getElementById('throttle-value').style.color = '#FFFF00';
         } else {
             document.getElementById('speed-value').style.color = '';
             document.getElementById('throttle-value').style.color = '';
@@ -481,6 +497,39 @@ function updateGameStats() {
         if (turnElement) {
             turnElement.textContent = turnPercent > 0 ? `${turnDirection} ${turnPercent}%` : 'CENTER';
         }
+        
+        // Update active powerups
+        updateActivePowerupsUI();
+    }
+}
+
+// Function to update active powerups in the UI
+function updateActivePowerupsUI() {
+    const powerupsElement = document.getElementById('powerups-value');
+    if (!powerupsElement) return;
+    
+    const activePowerups = [];
+    
+    // Check for active powerups
+    if (gameState.playerShip) {
+        if (gameState.playerShip.speedBoostTimeout) {
+            activePowerups.push('⚡ SPEED');
+        }
+        if (gameState.playerShip.shieldTimeout) {
+            activePowerups.push('🛡️ SHIELD');
+        }
+        if (gameState.playerShip.rapidFireTimeout) {
+            activePowerups.push('🔥 RAPID FIRE');
+        }
+    }
+    
+    // Update the UI
+    if (activePowerups.length > 0) {
+        powerupsElement.textContent = activePowerups.join(' | ');
+        powerupsElement.style.display = 'block';
+    } else {
+        powerupsElement.textContent = 'NONE';
+        powerupsElement.style.display = 'block';
     }
 }
 
@@ -509,9 +558,19 @@ function spawnRandomSeaObject() {
     window.spawnSeaObject(type);
 }
 
+// Function to spawn a powerup
+function spawnPowerup() {
+    // Skip if player ship doesn't exist or isn't loaded
+    if (!gameState.playerShip || !gameState.playerShip.isLoaded) return;
+    
+    // Spawn a powerup
+    window.spawnSeaObject('powerup');
+}
+
 // Make functions and variables available globally
 window.scene = scene;
 window.camera = camera;
 window.renderer = renderer;
 window.gameState = gameState;
-window.updateUI = updateUI; 
+window.updateUI = updateUI;
+window.updateActivePowerupsUI = updateActivePowerupsUI; 

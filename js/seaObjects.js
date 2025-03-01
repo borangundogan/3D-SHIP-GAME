@@ -1,8 +1,8 @@
-// Sea Objects - Bombs and Skittles
+// Sea Objects - Bombs, Skittles and Powerups
 class SeaObject {
     constructor(position, type) {
         this.position = position.clone();
-        this.type = type; // 'bomb' or 'skittle'
+        this.type = type; // 'bomb', 'skittle', or 'powerup'
         this.isActive = true;
         this.mesh = null;
         this.boundingBox = null;
@@ -11,7 +11,13 @@ class SeaObject {
         this.bobHeight = Math.random() * 0.5 + 0.5;
         this.initialY = position.y;
         this.age = 0;
-        this.lifespan = type === 'bomb' ? 60 : 120; // seconds
+        this.lifespan = type === 'bomb' ? 60 : type === 'powerup' ? 30 : 120; // seconds
+        
+        // For powerups, randomly select a type
+        if (type === 'powerup') {
+            const powerupTypes = ['speed', 'shield', 'rapidfire', 'health'];
+            this.powerupType = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+        }
         
         // Create the mesh
         this.createMesh();
@@ -104,6 +110,90 @@ class SeaObject {
             
             this.mesh = skittleGroup;
             this.color = color; // Store the color for later use
+        } else if (this.type === 'powerup') {
+            // Create a powerup (floating star or cube)
+            const powerupGroup = new THREE.Group();
+            
+            // Different colors for different powerup types
+            let color;
+            switch (this.powerupType) {
+                case 'speed':
+                    color = 0xffff00; // Yellow for speed boost
+                    break;
+                case 'shield':
+                    color = 0x00ffff; // Cyan for shield
+                    break;
+                case 'rapidfire':
+                    color = 0xff0000; // Red for rapid fire
+                    break;
+                case 'health':
+                    color = 0x00ff00; // Green for health
+                    break;
+                default:
+                    color = 0xffffff; // White as fallback
+            }
+            
+            // Create a star shape for the powerup
+            if (this.powerupType === 'speed' || this.powerupType === 'rapidfire') {
+                // Star shape for speed and rapid fire
+                const starPoints = [];
+                const outerRadius = 5;
+                const innerRadius = 2.5;
+                const numPoints = 5;
+                
+                for (let i = 0; i < numPoints * 2; i++) {
+                    const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                    const angle = (i / numPoints) * Math.PI;
+                    starPoints.push(new THREE.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius));
+                }
+                
+                const starShape = new THREE.Shape(starPoints);
+                const extrudeSettings = {
+                    depth: 1,
+                    bevelEnabled: false
+                };
+                
+                geometry = new THREE.ExtrudeGeometry(starShape, extrudeSettings);
+                material = new THREE.MeshPhongMaterial({
+                    color: color,
+                    shininess: 100,
+                    emissive: color,
+                    emissiveIntensity: 0.5
+                });
+                
+                const star = new THREE.Mesh(geometry, material);
+                star.rotation.x = Math.PI / 2; // Lay flat
+                powerupGroup.add(star);
+            } else {
+                // Cube for shield and health
+                geometry = new THREE.BoxGeometry(4, 4, 4);
+                material = new THREE.MeshPhongMaterial({
+                    color: color,
+                    shininess: 100,
+                    emissive: color,
+                    emissiveIntensity: 0.5
+                });
+                
+                const cube = new THREE.Mesh(geometry, material);
+                powerupGroup.add(cube);
+            }
+            
+            // Add glow effect
+            const glowGeometry = new THREE.SphereGeometry(6, 16, 16);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.3
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            powerupGroup.add(glow);
+            
+            this.mesh = powerupGroup;
+            
+            // Add a point light to make it glow
+            this.light = new THREE.PointLight(color, 1, 15);
+            this.light.position.copy(this.position);
+            window.scene.add(this.light);
         }
         
         // Position the mesh
@@ -141,14 +231,30 @@ class SeaObject {
         // Update the bounding box
         this.boundingBox.setFromObject(this.mesh);
         
-        // Update light position for bombs
-        if (this.type === 'bomb' && this.light) {
+        // Update light position for bombs and powerups
+        if ((this.type === 'bomb' || this.type === 'powerup') && this.light) {
             this.light.position.copy(this.mesh.position);
         }
         
         // Make bombs pulse if they're about to explode
         if (this.type === 'bomb' && this.age > this.lifespan - 10) {
             const pulseIntensity = 0.5 + Math.sin(this.age * 5) * 0.5;
+            this.light.intensity = pulseIntensity;
+            
+            // Find the glow mesh and update its opacity
+            this.mesh.children.forEach(child => {
+                if (child.material && child.material.transparent) {
+                    child.material.opacity = 0.2 + pulseIntensity * 0.3;
+                }
+            });
+        }
+        
+        // Make powerups spin faster and pulse
+        if (this.type === 'powerup') {
+            this.mesh.rotation.y += this.rotationSpeed * 2;
+            
+            // Pulse the glow
+            const pulseIntensity = 0.5 + Math.sin(this.age * 3) * 0.5;
             this.light.intensity = pulseIntensity;
             
             // Find the glow mesh and update its opacity
@@ -226,6 +332,130 @@ class SeaObject {
             
             // Update the bounding box
             this.boundingBox.setFromObject(this.mesh);
+        } else if (this.type === 'powerup' && ship.isPlayer) {
+            // Apply powerup effect
+            switch (this.powerupType) {
+                case 'speed':
+                    // Speed boost for 10 seconds
+                    if (!ship.originalMaxSpeed) {
+                        ship.originalMaxSpeed = ship.maxSpeed;
+                    }
+                    
+                    // Clear any existing speed boost timeout
+                    if (ship.speedBoostTimeout) {
+                        clearTimeout(ship.speedBoostTimeout);
+                    }
+                    
+                    // Double the ship's speed
+                    ship.maxSpeed = ship.originalMaxSpeed * 2;
+                    
+                    // Create visual effect
+                    ship.speedBoostEffect = createSpeedBoostEffect(ship);
+                    
+                    // Reset after 10 seconds
+                    ship.speedBoostTimeout = setTimeout(() => {
+                        ship.maxSpeed = ship.originalMaxSpeed;
+                        
+                        // Remove effect
+                        if (ship.speedBoostEffect && ship.speedBoostEffect.parent) {
+                            ship.speedBoostEffect.parent.remove(ship.speedBoostEffect);
+                            ship.speedBoostEffect = null;
+                        }
+                        
+                        console.log("Speed boost ended");
+                    }, 10000);
+                    
+                    console.log("Speed boost activated!");
+                    break;
+                    
+                case 'shield':
+                    // Shield for 15 seconds
+                    // Clear any existing shield timeout
+                    if (ship.shieldTimeout) {
+                        clearTimeout(ship.shieldTimeout);
+                    } else {
+                        // Only add the invulnerability property if it didn't exist before
+                        ship.isInvulnerable = true;
+                    }
+                    
+                    // Create shield effect if it doesn't exist
+                    if (!ship.shieldEffect) {
+                        ship.shieldEffect = createShieldEffect(ship);
+                    }
+                    
+                    // Reset after 15 seconds
+                    ship.shieldTimeout = setTimeout(() => {
+                        ship.isInvulnerable = false;
+                        
+                        // Remove effect
+                        if (ship.shieldEffect && ship.shieldEffect.parent) {
+                            ship.shieldEffect.parent.remove(ship.shieldEffect);
+                            ship.shieldEffect = null;
+                        }
+                        
+                        console.log("Shield deactivated");
+                    }, 15000);
+                    
+                    console.log("Shield activated!");
+                    break;
+                    
+                case 'rapidfire':
+                    // Rapid fire for 8 seconds
+                    // Clear any existing rapid fire timeout
+                    if (ship.rapidFireTimeout) {
+                        clearTimeout(ship.rapidFireTimeout);
+                    } else {
+                        // Only set the property if it didn't exist before
+                        ship.hasRapidFire = true;
+                        // Store the original cooldown
+                        ship.originalFireCooldown = window.fireCooldown || 0.5;
+                        // Set a shorter cooldown
+                        window.fireCooldown = 0.1;
+                    }
+                    
+                    // Create rapid fire effect
+                    ship.rapidFireEffect = createRapidFireEffect(ship);
+                    
+                    // Reset after 8 seconds
+                    ship.rapidFireTimeout = setTimeout(() => {
+                        ship.hasRapidFire = false;
+                        window.fireCooldown = ship.originalFireCooldown;
+                        
+                        // Remove effect
+                        if (ship.rapidFireEffect && ship.rapidFireEffect.parent) {
+                            ship.rapidFireEffect.parent.remove(ship.rapidFireEffect);
+                            ship.rapidFireEffect = null;
+                        }
+                        
+                        console.log("Rapid fire ended");
+                    }, 8000);
+                    
+                    console.log("Rapid fire activated!");
+                    break;
+                    
+                case 'health':
+                    // Restore health
+                    ship.health = Math.min(100, ship.health + 30);
+                    
+                    // Create healing effect
+                    createHealingEffect(ship);
+                    
+                    // Update UI
+                    window.updateUI();
+                    
+                    console.log("Health restored!");
+                    break;
+            }
+            
+            // Add points for collecting a powerup
+            window.gameState.score += 20;
+            window.updateUI();
+            
+            // Play a sound effect
+            // TODO: Add sound effect for powerup collection
+            
+            // Destroy the powerup
+            this.destroy();
         }
     }
     
@@ -369,6 +599,217 @@ function createSlowEffect(ship) {
     ship.model.add(slowEffect);
     
     return slowEffect;
+}
+
+// Create a speed boost effect
+function createSpeedBoostEffect(ship) {
+    // Create yellow trails behind the ship
+    const trailGroup = new THREE.Group();
+    
+    // Create multiple trail particles
+    for (let i = 0; i < 2; i++) {
+        const trailGeometry = new THREE.ConeGeometry(1, 15, 8);
+        const trailMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffff00,
+            transparent: true,
+            opacity: 0.7
+        });
+        
+        const trail = new THREE.Mesh(trailGeometry, trailMaterial);
+        trail.rotation.x = Math.PI / 2; // Point backward
+        trail.position.set(i === 0 ? -3 : 3, 0, -15); // Position behind the ship
+        trailGroup.add(trail);
+    }
+    
+    ship.model.add(trailGroup);
+    
+    // Animate the trails
+    const animate = () => {
+        if (!ship.speedBoostEffect) return;
+        
+        trailGroup.children.forEach(trail => {
+            trail.material.opacity = 0.5 + Math.random() * 0.5;
+            trail.scale.set(
+                0.8 + Math.random() * 0.4,
+                0.8 + Math.random() * 0.4,
+                0.8 + Math.random() * 0.4
+            );
+        });
+        
+        requestAnimationFrame(animate);
+    };
+    
+    animate();
+    
+    return trailGroup;
+}
+
+// Create a shield effect
+function createShieldEffect(ship) {
+    // Create a bubble shield around the ship
+    const geometry = new THREE.SphereGeometry(18, 32, 32);
+    const material = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide,
+        wireframe: true
+    });
+    
+    const shield = new THREE.Mesh(geometry, material);
+    ship.model.add(shield);
+    
+    // Add a solid inner shield
+    const innerGeometry = new THREE.SphereGeometry(17, 32, 32);
+    const innerMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.1
+    });
+    
+    const innerShield = new THREE.Mesh(innerGeometry, innerMaterial);
+    shield.add(innerShield);
+    
+    // Animate the shield
+    const animate = () => {
+        if (!ship.shieldEffect) return;
+        
+        shield.rotation.y += 0.01;
+        shield.rotation.z += 0.005;
+        
+        // Pulse the opacity
+        const pulse = 0.2 + Math.sin(Date.now() * 0.003) * 0.1;
+        material.opacity = pulse;
+        innerMaterial.opacity = pulse * 0.5;
+        
+        requestAnimationFrame(animate);
+    };
+    
+    animate();
+    
+    return shield;
+}
+
+// Create a rapid fire effect
+function createRapidFireEffect(ship) {
+    // Create glowing effect on the cannon
+    const cannonGroup = new THREE.Group();
+    
+    // Find the cannon in the ship model
+    let cannon = null;
+    ship.model.traverse(child => {
+        if (child instanceof THREE.Mesh && child.position.z > 5) {
+            cannon = child;
+        }
+    });
+    
+    if (cannon) {
+        // Create a glow around the cannon
+        const glowGeometry = new THREE.CylinderGeometry(1.2, 1.5, 10.5, 16);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.5,
+            side: THREE.DoubleSide
+        });
+        
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.position.copy(cannon.position);
+        glow.rotation.copy(cannon.rotation);
+        cannonGroup.add(glow);
+    }
+    
+    ship.model.add(cannonGroup);
+    
+    // Animate the effect
+    const animate = () => {
+        if (!ship.rapidFireEffect) return;
+        
+        cannonGroup.children.forEach(glow => {
+            glow.material.opacity = 0.3 + Math.sin(Date.now() * 0.01) * 0.2;
+        });
+        
+        requestAnimationFrame(animate);
+    };
+    
+    animate();
+    
+    return cannonGroup;
+}
+
+// Create a healing effect
+function createHealingEffect(ship) {
+    // Create rising green particles
+    const particleCount = 30;
+    const geometry = new THREE.BufferGeometry();
+    
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+    
+    const color = new THREE.Color(0x00ff00);
+    
+    for (let i = 0; i < particleCount; i++) {
+        // Random position around the ship
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * 10;
+        
+        positions[i * 3] = Math.cos(angle) * radius;
+        positions[i * 3 + 1] = Math.random() * 5; // Start at different heights
+        positions[i * 3 + 2] = Math.sin(angle) * radius;
+        
+        // Green color with slight variation
+        colors[i * 3] = 0.3 + Math.random() * 0.2; // R
+        colors[i * 3 + 1] = 0.8 + Math.random() * 0.2; // G
+        colors[i * 3 + 2] = 0.3 + Math.random() * 0.2; // B
+        
+        // Random size
+        sizes[i] = Math.random() * 2 + 1;
+    }
+    
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    
+    const material = new THREE.PointsMaterial({
+        size: 1,
+        vertexColors: true,
+        transparent: true,
+        opacity: 1.0
+    });
+    
+    const particles = new THREE.Points(geometry, material);
+    ship.model.add(particles);
+    
+    // Animate the particles rising and fading
+    const startTime = performance.now();
+    const duration = 2000; // 2 seconds
+    
+    function animateHealing() {
+        const currentTime = performance.now();
+        const elapsed = currentTime - startTime;
+        const progress = elapsed / duration;
+        
+        if (progress >= 1) {
+            // Remove particles
+            ship.model.remove(particles);
+            return;
+        }
+        
+        // Move particles upward
+        const positions = particles.geometry.attributes.position.array;
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3 + 1] += 0.2; // Move up
+        }
+        particles.geometry.attributes.position.needsUpdate = true;
+        
+        // Fade out
+        material.opacity = 1 - progress;
+        
+        requestAnimationFrame(animateHealing);
+    }
+    
+    animateHealing();
 }
 
 // Function to spawn a sea object

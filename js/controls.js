@@ -480,9 +480,11 @@ function updatePlayerControls(playerShip, delta) {
     // Handle firing
     if (keyStates.fire) {
         const currentTime = performance.now() / 1000;
-        if (currentTime - lastFireTime >= fireCooldown) {
+        // Use the global fireCooldown which can be modified by powerups
+        const cooldown = window.fireCooldown || 0.5;
+        if (currentTime - window.lastFireTime >= cooldown) {
             window.fireProjectile(playerShip);
-            lastFireTime = currentTime;
+            window.lastFireTime = currentTime;
         }
     }
     

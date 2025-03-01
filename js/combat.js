@@ -77,6 +77,21 @@ class Projectile {
                 continue;
             }
             
+            // Skip if ship has shield (is invulnerable)
+            if (ship.isInvulnerable) {
+                // If projectile is close to the shield, create a shield impact effect and destroy the projectile
+                if (ship.boundingBox && 
+                    this.position.distanceTo(ship.position) < 20) {
+                    // Create shield impact effect
+                    createShieldImpactEffect(ship, this.position);
+                    
+                    // Destroy projectile
+                    this.destroy();
+                    break;
+                }
+                continue;
+            }
+            
             // Check if projectile is within ship's bounding box
             if (ship.boundingBox && ship.boundingBox.containsPoint(this.position)) {
                 // Hit detected
@@ -231,8 +246,106 @@ function updateEnemyAI(delta) {
     }
 }
 
+// Create a shield impact effect
+function createShieldImpactEffect(ship, impactPosition) {
+    // Calculate impact position relative to ship
+    const relativePosition = impactPosition.clone().sub(ship.position);
+    relativePosition.normalize().multiplyScalar(17); // Position at shield radius
+    
+    // Create impact particles
+    const particleCount = 20;
+    const geometry = new THREE.BufferGeometry();
+    
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+    
+    const color = new THREE.Color(0x00ffff);
+    
+    for (let i = 0; i < particleCount; i++) {
+        // Random position around impact point
+        const offset = new THREE.Vector3(
+            (Math.random() - 0.5) * 5,
+            (Math.random() - 0.5) * 5,
+            (Math.random() - 0.5) * 5
+        );
+        
+        const particlePos = relativePosition.clone().add(offset);
+        
+        positions[i * 3] = particlePos.x;
+        positions[i * 3 + 1] = particlePos.y;
+        positions[i * 3 + 2] = particlePos.z;
+        
+        // Cyan color with slight variation
+        colors[i * 3] = 0; // R
+        colors[i * 3 + 1] = 0.8 + Math.random() * 0.2; // G
+        colors[i * 3 + 2] = 0.8 + Math.random() * 0.2; // B
+        
+        // Random size
+        sizes[i] = Math.random() * 2 + 1;
+    }
+    
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    
+    const material = new THREE.PointsMaterial({
+        size: 1,
+        vertexColors: true,
+        transparent: true,
+        opacity: 1.0
+    });
+    
+    const particles = new THREE.Points(geometry, material);
+    ship.model.add(particles);
+    
+    // Add a point light for the impact
+    const light = new THREE.PointLight(0x00ffff, 2, 20);
+    light.position.copy(relativePosition);
+    ship.model.add(light);
+    
+    // Animate the impact
+    const startTime = performance.now();
+    const duration = 500; // 0.5 seconds
+    
+    function animateImpact() {
+        const currentTime = performance.now();
+        const elapsed = currentTime - startTime;
+        const progress = elapsed / duration;
+        
+        if (progress >= 1) {
+            // Remove particles and light
+            ship.model.remove(particles);
+            ship.model.remove(light);
+            return;
+        }
+        
+        // Expand particles
+        const positions = particles.geometry.attributes.position.array;
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3] *= 1.05;
+            positions[i * 3 + 1] *= 1.05;
+            positions[i * 3 + 2] *= 1.05;
+        }
+        particles.geometry.attributes.position.needsUpdate = true;
+        
+        // Fade out
+        material.opacity = 1 - progress;
+        light.intensity = 2 * (1 - progress);
+        
+        requestAnimationFrame(animateImpact);
+    }
+    
+    animateImpact();
+}
+
+// Set global fire cooldown
+window.fireCooldown = 0.5; // seconds
+window.lastFireTime = 0;
+
 // Make functions available globally
 window.Projectile = Projectile;
 window.fireProjectile = fireProjectile;
 window.updateProjectiles = updateProjectiles;
-window.updateEnemyAI = updateEnemyAI; 
+window.updateEnemyAI = updateEnemyAI;
+window.createShieldImpactEffect = createShieldImpactEffect; 
